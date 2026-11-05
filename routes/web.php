@@ -12,6 +12,7 @@ use App\Http\Controllers\EligibilityController;
 use App\Http\Controllers\Fo;
 use App\Http\Controllers\ImisSummaryController;
 use App\Http\Controllers\KioskAdminController;
+use App\Http\Controllers\LegacySyncController;
 use App\Http\Controllers\PeopleSearchController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StatisticsController;
@@ -101,6 +102,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/transactions/{transaction}/authenticated-copy', [TransactionPrintController::class, 'authenticatedCopy'])->can('manage', 'transaction')->name('transactions.print.auth');
         Route::get('/transactions/{id}/attachments/{slot}', AttachmentController::class)->whereNumber(['id', 'slot'])->can('viewAny', Transaction::class)->name('attachments.show');
         Route::get('/activity', [ActivityLogController::class, 'index'])->can('viewAny', AuditLog::class)->name('activity');
+        // One limit for the whole group: a plain throttle:N,M counter is shared by every route that uses it, and a run is ~10 calls.
+        Route::prefix('/legacy-sync')->name('legacy-sync')->can('viewAny', AuditLog::class)->middleware('throttle:200,1')->group(function () {
+            Route::get('/', [LegacySyncController::class, 'show']);
+            Route::post('/preview', [LegacySyncController::class, 'preview'])->name('.preview');
+            Route::post('/begin', [LegacySyncController::class, 'begin'])->name('.begin');
+            Route::post('/step', [LegacySyncController::class, 'step'])->name('.step');
+            Route::post('/finish', [LegacySyncController::class, 'finish'])->name('.finish');
+            Route::post('/abort', [LegacySyncController::class, 'abort'])->name('.abort');
+        });
         Route::get('/activity/export', [ActivityLogController::class, 'export'])->can('viewAny', AuditLog::class)->name('activity.export');
         Route::get('/transactions/{id}/timeline', TransactionTimelineController::class)->whereNumber('id')->can('viewAny', Transaction::class)->name('transactions.timeline');
         Route::post('/transactions/batch-status', [TransactionStatusController::class, 'batch'])->can('process', Transaction::class)->name('transactions.batch');

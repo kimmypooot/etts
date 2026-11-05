@@ -128,6 +128,45 @@ class ImportLegacyTransactionsTest extends TestCase
         ]);
     }
 
+    public function test_a_sync_adds_new_rows_and_legacys_newer_changes_but_never_overwrites_edits_made_here(): void
+    {
+        $this->artisan('etts:import-legacy-transactions')->assertFailed();
+
+        // Edited here after the import: its updated_at is later than legacy's timestamp.
+        DB::table('transactions')->where('id', 1)->update(['lname' => 'EditedHere', 'updated_at' => '2026-06-01 00:00:00']);
+        DB::table('transmittal_items')->where('id', 301)->update(['remarks' => 'Changed here']);
+
+        $legacy = DB::connection('legacy');
+        // Legacy changed record 2 after this system last did; record 3 is untouched; 5 is new.
+        $legacy->table('esd_casts_records')->where('id', 2)->update(['lname' => 'Changed', 'timestamp' => '2026-07-01 09:00:00']);
+        $legacy->table('esd_casts_records')->where('id', 1)->update(['lname' => 'LegacyOverwrite', 'timestamp' => '2026-03-01 09:00:00']);
+        $legacy->table('esd_casts_records')->insert(['id' => 5, 'office_id' => 1, 'fname' => 'New', 'lname' => 'Person', 'transaction_type' => 'Special Eligibility Application', 'transaction_status' => 'Approved', 'transaction_date' => '2026-05-05 08:00:00', 'timestamp' => '2026-05-06 09:00:00']);
+        $legacy->table('esd_casts_transmittal_items')->where('id', 301)->update(['remarks' => 'Changed in legacy']);
+
+        $this->artisan('etts:import-legacy-transactions', ['--sync' => true])->assertFailed(); // row 4 still cannot be linked
+
+        $this->assertSame('EditedHere', DB::table('transactions')->where('id', 1)->value('lname'));
+        $this->assertSame('Changed', DB::table('transactions')->where('id', 2)->value('lname'));
+        $this->assertSame('Uy', DB::table('transactions')->where('id', 3)->value('lname'));
+        $this->assertDatabaseHas('transactions', ['id' => 5, 'lname' => 'Person']);
+        $this->assertSame('Changed here', DB::table('transmittal_items')->where('id', 301)->value('remarks'));
+        $this->assertDatabaseCount('transmittal_items', 2);
+    }
+
+    public function test_a_sync_reports_records_deleted_in_legacy_that_are_still_live_here(): void
+    {
+        $this->artisan('etts:import-legacy-transactions')->assertFailed();
+
+        $legacy = DB::connection('legacy');
+        $legacy->table('esd_casts_records_deleted')->insert(['id' => 2, 'office_id' => 1, 'fname' => 'Ben', 'lname' => 'Lim', 'transaction_type' => 'Special Eligibility Application', 'transaction_status' => 'Approved', 'transaction_date' => '2026-02-05 08:00:00', 'deleted_at' => '2026-08-01 10:00:00', 'deletion_reason_code' => 'DUPLICATE']);
+        $legacy->table('esd_casts_records')->where('id', 2)->delete();
+
+        $report = app(\App\Services\Legacy\TransactionImporter::class)->run(sync: true);
+
+        $this->assertNotEmpty(array_filter($report['warnings'], fn (string $w) => str_contains($w, 'still live here')));
+        $this->assertDatabaseHas('transactions', ['id' => 2]);
+    }
+
     public function test_it_copies_every_table_keeping_the_legacy_ids(): void
     {
         $this->artisan('etts:import-legacy-transactions')->assertFailed();

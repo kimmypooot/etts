@@ -11,6 +11,16 @@ Goal: move ESD, the field offices and the kiosks from the legacy `/etts/` app to
 5. **Deploy** the code, `composer install --no-dev`, `npm ci && npm run build`, `php artisan migrate --force`, `php artisan config:cache route:cache view:cache`.
 6. **UAT**: ESD and one field office each file, forward, receive, transmit and approve a few records on the rehearsal copy. Test a kiosk end to end.
 
+## Keeping the rehearsal copy current ("Sync from legacy")
+
+While the legacy app is still in use, the rehearsal copy goes stale. Set `ETTS_LEGACY_SYNC=true` (and the `LEGACY_DB_*` settings), then use **Settings > Sync from legacy** or `php artisan etts:sync-legacy` (add `--apply` to write; without it the command only previews). Both only read legacy and are safe to repeat:
+
+- **Preview first**: counts what would be added, updated and left alone, writing nothing.
+- A record is added when it is new, and updated when legacy changed it after this system last did; a record edited here (UAT) is never overwritten, and nothing is removed (a record deleted in legacy is only reported).
+- Transmittals, their items and the activity history only gain new rows.
+- It runs one table at a time, so no single request runs long; only one sync can run at once.
+
+It does not replace the final import. On cutover day still run `etts:import-legacy-transactions --fresh`, the only step that makes the copy match legacy exactly (deletions included). **Set `ETTS_LEGACY_SYNC=false` once ETTS is live**: from then on this system is the source of truth, and the legacy copy is stale.
 ## Cutover day
 
 1. Announce the freeze. Put the legacy app in maintenance (or block its write endpoints). Nothing is written to legacy after this point.

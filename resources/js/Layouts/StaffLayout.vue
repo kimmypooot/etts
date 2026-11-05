@@ -54,6 +54,7 @@ const navItems = [
     { label: 'Eligibility types', href: '/admin/eligibilities', icon: 'tag', permission: 'eligibilities.manage' },
     { label: 'Kiosks', href: '/admin/kiosks', icon: 'desktop', permission: 'kiosks.manage' },
     { label: 'Staff', href: '/admin/users', icon: 'users', permission: 'activity.view' },
+    { label: 'Sync from legacy', href: '/admin/legacy-sync', icon: 'refresh', permission: 'activity.view' },
 ];
 
 const STORAGE_KEY = 'etts.sidebar-open';
