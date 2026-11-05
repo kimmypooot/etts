@@ -63,6 +63,16 @@ return [
     ],
 
     /*
+    | "Sync from legacy": lets an administrator pull the legacy database's
+    | latest changes in while the old app is still the one in use. Leave it
+    | OFF in production once ETTS is live: from then on this system is the
+    | source of truth and the legacy copy is stale.
+    */
+    'legacy_sync' => [
+        'enabled' => (bool) env('ETTS_LEGACY_SYNC', false),
+    ],
+
+    /*
     | The sister systems in the header's app switcher ("Examination-Related
     | Info. System", as in the legacy header): ESD staff jump to them from
     | here. Paths hang off ETTS_ERIS_URL, so a move of ERIS is one .env edit.

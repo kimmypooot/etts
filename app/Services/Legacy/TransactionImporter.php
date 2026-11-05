@@ -53,17 +53,32 @@ final class TransactionImporter
     /** @var array<string, int> */
     private array $normalised = ['trimmed' => 0, 'emptied_to_null' => 0, 'zero_dates_cleared' => 0, 'statuses_canonicalised' => 0, 'sex_expanded' => 0];
 
-    /** @var array<string, array{read: int, written: int, skipped: int}> */
+    /** Tables that carry `updated_at`: a sync only overwrites a row the legacy side changed more recently. */
+    private const NEWER_WINS = ['transactions', 'deleted_transactions', 'issuance_requests', 'deleted_issuance_requests'];
+
+    /** True during a sync (see run()): never overwrite what this system holds. */
+    private bool $sync = false;
+
+    /** @var array<string, array{read: int, written: int, skipped: int, kept: int}> */
     private array $tables = [];
 
     /** @var list<string> */
     private array $warnings = [];
 
     /**
-     * @return array{tables: array<string, array{read: int, written: int, skipped: int}>, normalised: array<string, int>, warnings: list<string>}
+     * With `sync`, the run is safe to repeat while the legacy app is still in
+     * use: a row is only written when it is new here, or (for tables with
+     * `updated_at`) when legacy changed it after this system last did. A row
+     * edited here since the last import is kept, and so is any row legacy has
+     * not touched. Tables without `updated_at` (transmittals, their items, the
+     * activity trail) only gain new rows. Rows deleted in legacy are reported,
+     * not removed; the final import at cutover uses `fresh`.
+     *
+     * @return array{tables: array<string, array{read: int, written: int, skipped: int, kept: int}>, normalised: array<string, int>, warnings: list<string>}
      */
-    public function run(bool $fresh = false): array
+    public function run(bool $fresh = false, bool $sync = false): array
     {
+        $this->sync = $sync && ! $fresh;
         $this->tables = [];
         $this->warnings = [];
         $this->normalised = ['trimmed' => 0, 'emptied_to_null' => 0, 'zero_dates_cleared' => 0, 'statuses_canonicalised' => 0, 'sex_expanded' => 0];
@@ -122,6 +137,14 @@ final class TransactionImporter
             $this->warnings[] = "{$orphans} activity log row(s) point at a record that is in neither the live table nor the archive. Imported as history, with no link.";
         }
 
+        if ($this->sync) {
+            $stillLive = DB::table('transactions')->whereIn('id', DB::table('deleted_transactions')->select('id'))->count();
+
+            if ($stillLive > 0) {
+                $this->warnings[] = "{$stillLive} record(s) were deleted in the legacy app but are still live here. A sync does not remove records; the final import at cutover (--fresh) does.";
+            }
+        }
+
         return ['tables' => $this->tables, 'normalised' => $this->normalised, 'warnings' => $this->warnings];
     }
 
@@ -142,7 +165,7 @@ final class TransactionImporter
      */
     private function copy(string $source, string $destination, string $orderBy, Closure $map, ?Closure $skipReason = null, int $chunk = self::CHUNK): void
     {
-        $report = ['read' => 0, 'written' => 0, 'skipped' => 0];
+        $report = ['read' => 0, 'written' => 0, 'skipped' => 0, 'kept' => 0];
 
         DB::connection('legacy')->table($source)->orderBy($orderBy)->chunk($chunk, function ($rows) use ($destination, $map, $skipReason, &$report, $source) {
             $batch = [];
@@ -160,6 +183,12 @@ final class TransactionImporter
                 }
 
                 $batch[] = $map($row);
+            }
+
+            if ($this->sync && $batch !== []) {
+                $before = count($batch);
+                $batch = $this->changedOnly($destination, $batch);
+                $report['kept'] += $before - count($batch);
             }
 
             if ($batch !== []) {
@@ -321,6 +350,40 @@ final class TransactionImporter
         }
 
         return $row;
+    }
+
+    /**
+     * Sync only: drops the rows that must not be written. A row new to this
+     * system is always written. For a table with `updated_at`, an existing row
+     * is rewritten only when legacy's copy is strictly newer (a row edited here
+     * has a later `updated_at` than legacy's `timestamp`, so it is kept). For
+     * any other table an existing row is kept as it is.
+     *
+     * @param  list<array<string, mixed>>  $batch
+     * @return list<array<string, mixed>>
+     */
+    private function changedOnly(string $destination, array $batch): array
+    {
+        $ids = array_column($batch, 'id');
+
+        if (! in_array($destination, self::NEWER_WINS, true)) {
+            $existing = DB::table($destination)->whereIn('id', $ids)->pluck('id')->flip()->all();
+
+            return array_values(array_filter($batch, fn (array $row) => ! isset($existing[$row['id']])));
+        }
+
+        $existing = DB::table($destination)->whereIn('id', $ids)->pluck('updated_at', 'id')->all();
+
+        return array_values(array_filter($batch, function (array $row) use ($existing) {
+            if (! array_key_exists($row['id'], $existing)) {
+                return true;
+            }
+
+            $here = $existing[$row['id']];
+            $legacy = $row['updated_at'] ?? null;
+
+            return $here === null || ($legacy !== null && (string) $legacy > (string) $here);
+        }));
     }
 
     /**

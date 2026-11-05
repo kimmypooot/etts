@@ -12,6 +12,7 @@ use App\Http\Controllers\EligibilityController;
 use App\Http\Controllers\Fo;
 use App\Http\Controllers\ImisSummaryController;
 use App\Http\Controllers\KioskAdminController;
+use App\Http\Controllers\LegacySyncController;
 use App\Http\Controllers\PeopleSearchController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StatisticsController;
@@ -101,6 +102,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/transactions/{transaction}/authenticated-copy', [TransactionPrintController::class, 'authenticatedCopy'])->can('manage', 'transaction')->name('transactions.print.auth');
         Route::get('/transactions/{id}/attachments/{slot}', AttachmentController::class)->whereNumber(['id', 'slot'])->can('viewAny', Transaction::class)->name('attachments.show');
         Route::get('/activity', [ActivityLogController::class, 'index'])->can('viewAny', AuditLog::class)->name('activity');
+        Route::get('/legacy-sync', [LegacySyncController::class, 'show'])->can('sync-legacy')->name('legacy-sync');
+        Route::post('/legacy-sync', [LegacySyncController::class, 'run'])->can('sync-legacy')->middleware('throttle:6,1')->name('legacy-sync.run');
         Route::get('/activity/export', [ActivityLogController::class, 'export'])->can('viewAny', AuditLog::class)->name('activity.export');
         Route::get('/transactions/{id}/timeline', TransactionTimelineController::class)->whereNumber('id')->can('viewAny', Transaction::class)->name('transactions.timeline');
         Route::post('/transactions/batch-status', [TransactionStatusController::class, 'batch'])->can('process', Transaction::class)->name('transactions.batch');
