@@ -159,7 +159,7 @@ onBeforeUnmount(() => {
                 <img :src="logo" alt="CSC" class="h-9 w-auto" />
                 <span class="leading-tight">
                     <span class="block text-lg font-semibold text-primary">ETTS</span>
-                    <span class="hidden text-xs text-text-muted sm:block">Examination Transaction Tracking</span>
+                    <span class="hidden text-xs text-text-muted sm:block">Examination Transaction and Tracking System</span>
                 </span>
             </Link>
 

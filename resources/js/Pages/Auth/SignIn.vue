@@ -23,7 +23,7 @@ const logo = '/images/csc-logo.png';
                     <img :src="logo" alt="" class="h-11 w-auto shrink-0 select-none" draggable="false" />
                     <div>
                         <p class="text-base leading-snug font-semibold text-primary">ETTS</p>
-                        <p class="text-xs text-text-muted">Examination Transaction Tracking System</p>
+                        <p class="text-xs text-text-muted">Examination Transaction and Tracking System</p>
                     </div>
                 </div>
 

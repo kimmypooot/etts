@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#2A338F">
 
     <title inertia>{{ config('app.name', 'ETTS') }}</title>
-    <meta name="description" content="Examination Transaction Tracking System, CSC Regional Office VIII.">
+    <meta name="description" content="Examination Transaction and Tracking System, CSC Regional Office VIII.">
 
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>

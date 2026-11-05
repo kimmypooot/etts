@@ -1,6 +1,6 @@
 # ETTS
 
-Examination Transaction Tracking System for the Civil Service Commission
+Examination Transaction and Tracking System for the Civil Service Commission
 Regional Office VIII, Examination Services Division (ESD). It tracks
 certifications, authentications and Special Eligibility Applications (SPELS)
 filed at ESD and at the field and satellite offices, plus the transmittals
