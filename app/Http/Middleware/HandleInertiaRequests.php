@@ -50,7 +50,6 @@ class HandleInertiaRequests extends Middleware
                     'fo.portal' => $user->can('office', Transaction::class),
                     'fo.create' => $user->can('createAsOffice', Transaction::class),
                     'kiosks.manage' => $user->can('viewAny', KioskTerminal::class),
-                    'legacy.sync' => $user->can('sync-legacy'),
                     'archive.view' => $user->can('viewAny', DeletedTransaction::class),
                     'eligibilities.manage' => $user->can('viewAny', Eligibility::class),
                 ])) : [],

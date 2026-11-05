@@ -8,7 +8,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
-#[Signature('etts:import-legacy-transactions {--fresh : Empty the transaction tables first (use for the final import at cutover)} {--sync : Only add new rows and rows legacy changed after this system did; never overwrite newer edits made here}')]
+#[Signature('etts:import-legacy-transactions {--fresh : Empty the transaction tables first (use for the final import at cutover)}')]
 #[Description('Import transactions, issuance requests, the deleted-records archive and the activity trail from the legacy database (read only).')]
 class ImportLegacyTransactionsCommand extends Command
 {
@@ -30,11 +30,11 @@ class ImportLegacyTransactionsCommand extends Command
             return self::FAILURE;
         }
 
-        $report = $importer->run((bool) $this->option('fresh'), (bool) $this->option('sync'));
+        $report = $importer->run((bool) $this->option('fresh'));
 
         $this->table(
-            ['Table', 'Read', 'Written', 'Kept', 'Skipped'],
-            collect($report['tables'])->map(fn (array $row, string $table) => [$table, $row['read'], $row['written'], $row['kept'], $row['skipped']])->values()->all(),
+            ['Table', 'Read', 'Written', 'Skipped'],
+            collect($report['tables'])->map(fn (array $row, string $table) => [$table, $row['read'], $row['written'], $row['skipped']])->values()->all(),
         );
 
         $this->components->info("Normalised: {$report['normalised']['trimmed']} value(s) trimmed, {$report['normalised']['emptied_to_null']} empty value(s) set to NULL, {$report['normalised']['zero_dates_cleared']} zero date(s) cleared, {$report['normalised']['statuses_canonicalised']} status spelling(s) corrected, {$report['normalised']['sex_expanded']} sex value(s) written in full.");
