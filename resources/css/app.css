@@ -1,0 +1,1055 @@
+/* Design tokens and base styles shared with IMIS (new-imis resources/css/app.css). */
+@import 'tailwindcss';
+@import './boot.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+/**
+ * Centralized design tokens for the CSC RO VIII IMIS.
+ * Change brand colors, typography, and radii here rather than
+ * hard-coding values inside individual components.
+ */
+@theme {
+    --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* CSC brand identity */
+    --color-csc-blue: #2a338f;
+    --color-csc-blue-dark: #1f2670;
+    --color-csc-blue-light: #4b55b5;
+    --color-csc-red: #ec1c2d;
+    --color-csc-red-dark: #c11421;
+
+    /* Chart series, in fixed order (validated: band, chroma, CVD ΔE 26.2,
+       normal ΔE 34.0, ≥3:1 on white). Neutral (3.3:1) is for "not recorded". */
+    --color-chart-1: var(--color-csc-blue-light);
+    --color-chart-2: #eb6834;
+    --color-chart-neutral: #8a8d9e;
+
+    /* Semantic surface / text tokens built on the brand palette */
+    --color-primary: var(--color-csc-blue);
+    --color-primary-hover: var(--color-csc-blue-dark);
+    --color-accent: var(--color-csc-red);
+    --color-accent-hover: var(--color-csc-red-dark);
+
+    --color-surface: #ffffff;
+    --color-surface-muted: #f5f6fa;
+    --color-border: #dfe1ea;
+    /* Edges of form controls (inputs, selects, checkboxes): 3.3:1 on white,
+       as WCAG 1.4.11 requires; the light border above is for cards/dividers. */
+    --color-border-strong: #8a8d9e;
+    --color-text: #1c1e2a;
+    --color-text-muted: #5a5d70;
+    --color-focus-ring: var(--color-csc-blue);
+
+    /* Semantic feedback colors — used by Alert/Badge/status components so
+       every part of the UI agrees on what "success"/"danger"/etc. look
+       like, instead of each component picking its own shade. */
+    --color-success: #1a7f4b;
+    --color-success-bg: #eafaf1;
+    --color-success-border: #b7e5cc;
+    --color-success-hover: #146a3e;
+
+    --color-warning: #92660a;
+    --color-warning-bg: #fdf5e2;
+    --color-warning-border: #f0dca3;
+
+    /* The darker CSC red: the brand red is 4.4:1 against white and 3.85:1 on
+       danger-bg, short of AA for small text; this is 6.2:1 and 5.4:1. Keep
+       the brand red (`accent`) for decoration, not for text or button fills. */
+    --color-danger: var(--color-csc-red-dark);
+    --color-danger-bg: #fdecec;
+    --color-danger-border: #f6bfc3;
+    --color-danger-hover: #9e101b;
+
+    /* Legacy "Access (Maintenance)" orange: a system under maintenance
+       that the viewer may still open. Darkened from the legacy #c85a00
+       (4.3:1) so white button text reaches AA (5.3:1). */
+    --color-bypass: #b04f00;
+    --color-bypass-hover: #9a4500;
+
+    /* The main website's link blue and alternate section background
+       (cscro8.com), for the public bulletin page only. */
+    --color-csc-sky: #0077b6;
+    --color-section-alt: #eef2f7;
+
+    --color-info: var(--color-csc-blue);
+    --color-info-bg: #eaecfa;
+    --color-info-border: #c3c8ec;
+
+    /* Radius scale — cards, inputs, and buttons all read from this rather
+       than picking their own rounding. */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+
+    /* Elevation is kept flat: containers (cards, banners) take a border, not
+       a shadow; only floating layers (menus, modals) use shadow-lg/xl. */
+}
+
+/**
+ * A visible keyboard focus indicator for every link and button that
+ * doesn't draw its own. Components with a custom ring set
+ * `focus:outline-none`, and utilities win over this base layer.
+ */
+@layer base {
+    :where(a, button, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+        outline: 2px solid var(--color-focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+}
+
+
+
+/*
+ * The content width of cscro8.com's own Bootstrap `.container-xl` (1140px
+ * up to 1399px, 1320px at 1400px+, 0.75rem gutters either side) — used by
+ * the public homepage (Components/Public/*) so it measures the same as
+ * the site it carries the design from, not Tailwind's nearest round
+ * number (max-w-6xl is 1152px, a false match).
+ */
+@utility gov-container {
+    margin-inline: auto;
+    padding-inline: 0.75rem;
+    max-width: 1140px;
+
+    @media (width >= 1400px) {
+        max-width: 1320px;
+    }
+}
+
+/*
+ * The header row of a list table (DataTable, dashboard tables, log
+ * tables): small muted uppercase labels on the muted surface. Put it on
+ * <thead>. Document tables that mirror a CSC form (Service Record,
+ * plantilla, leave card) keep their own, form-like headers.
+ */
+@utility table-head {
+    background-color: var(--color-surface-muted);
+    color: var(--color-text-muted);
+    text-align: left;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+}
+
+/*
+ * A scrollbar for dark (navy) surfaces such as the portal sidebar: a
+ * translucent white thumb on a clear track, so the navy shows through
+ * instead of the browser's light-grey gutter.
+ */
+@utility scrollbar-on-dark {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+
+    &:hover {
+        scrollbar-color: rgb(255 255 255 / 0.4) transparent;
+    }
+
+    /* Browsers without `scrollbar-color` (older Safari). */
+    &::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        border-radius: 9999px;
+        background-color: rgb(255 255 255 / 0.25);
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+        background-color: rgb(255 255 255 / 0.4);
+    }
+}
+
+/*
+ * The "service page" component kit cscro8.com's inner pages (Examination
+ * Services, Legal Services, Issuances, Directory, Citizen's Charter) share
+ * — carried over verbatim (same classes, same values) rather than
+ * redone in Tailwind utilities, for the ported Components/Public/* pages.
+ * Colors map to etts's matching tokens; spacing/radius/shadow are the
+ * original's literal values, since they don't line up with etts's own
+ * (differently-scaled) radius/shadow scale.
+ */
+@layer components {
+    .svc-page-body {
+        padding: 3.5rem 0 5rem;
+        background-color: #f4f7fb;
+    }
+
+    .svc-card {
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.625rem;
+        padding: 2rem;
+        margin-bottom: 1.75rem;
+        box-shadow: 0 2px 12px rgba(26, 58, 92, 0.08);
+    }
+
+    .svc-card-title {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--color-csc-blue);
+        margin-bottom: 1.25rem;
+        padding-bottom: 0.875rem;
+        border-bottom: 2px solid #fde8ea;
+
+        & svg {
+            color: var(--color-csc-red);
+        }
+    }
+
+    .svc-steps {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1.125rem;
+
+        & li {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+    }
+
+    .svc-step-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: var(--color-csc-red);
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .svc-step-body {
+        flex: 1;
+        padding-top: 4px;
+
+        & strong {
+            display: block;
+            font-size: 0.9375rem;
+            color: var(--color-text);
+            margin-bottom: 0.25rem;
+        }
+
+        & p {
+            font-size: 0.875rem;
+            color: var(--color-text-muted);
+            margin: 0;
+            line-height: 1.6;
+        }
+    }
+
+    .svc-req-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+
+        & li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.625rem;
+            font-size: 0.9rem;
+            color: var(--color-text-muted);
+            line-height: 1.55;
+        }
+
+        & li > svg:first-child {
+            color: var(--color-csc-red);
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+    }
+
+    .svc-detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+
+        & td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--color-border);
+            vertical-align: top;
+        }
+
+        & tr:last-child td {
+            border-bottom: none;
+        }
+
+        & td:first-child {
+            font-weight: 600;
+            color: var(--color-text);
+            width: 38%;
+            white-space: nowrap;
+        }
+
+        & td:last-child {
+            color: var(--color-text-muted);
+        }
+    }
+
+    .svc-alert {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-radius: 0.625rem;
+        font-size: 0.9rem;
+        margin-bottom: 0.875rem;
+
+        & svg {
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+    }
+
+    .svc-alert-warning {
+        background-color: #fff8e6;
+        border: 1px solid #ffd97d;
+        color: #7a5c00;
+    }
+
+    .svc-alert-info {
+        background-color: #e8eaf6;
+        border: 1px solid rgba(0, 119, 182, 0.2);
+        color: var(--color-csc-blue-dark);
+    }
+
+    .svc-alert-danger {
+        background-color: #fde8ea;
+        border: 1px solid rgba(236, 28, 45, 0.2);
+        color: var(--color-csc-red-dark);
+    }
+
+    .svc-cta-box {
+        background-color: var(--color-csc-blue);
+        border-radius: 0.625rem;
+        padding: 2.5rem;
+        text-align: center;
+        color: white;
+        margin-top: 2rem;
+
+        & h4 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 0.625rem;
+        }
+
+        & p {
+            font-size: 0.9375rem;
+            color: rgb(255 255 255 / 0.72);
+            margin-bottom: 1.5rem;
+        }
+    }
+
+    .btn-svc-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: var(--color-csc-red);
+        color: white;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        padding: 0.75rem 2rem;
+        border-radius: 0.375rem;
+        border: 2px solid var(--color-csc-red);
+        transition: background-color 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+
+        &:hover {
+            background-color: var(--color-csc-red-dark);
+            border-color: var(--color-csc-red-dark);
+            color: white;
+            transform: translateY(-1px);
+        }
+    }
+
+    .btn-svc-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: transparent;
+        color: rgb(255 255 255 / 0.8);
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding: 0.625rem 1.5rem;
+        border-radius: 0.375rem;
+        border: 1px solid rgb(255 255 255 / 0.3);
+        transition: background-color 0.22s ease, border-color 0.22s ease;
+
+        &:hover {
+            background-color: rgb(255 255 255 / 0.1);
+            border-color: rgb(255 255 255 / 0.6);
+            color: white;
+        }
+    }
+
+    .svc-info-sidebar {
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.625rem;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(26, 58, 92, 0.08);
+        position: sticky;
+        top: 90px;
+
+        & .sidebar-header {
+            background-color: var(--color-csc-blue);
+            color: white;
+            padding: 1rem 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+
+            & svg {
+                color: var(--color-csc-red);
+            }
+        }
+
+        & .sidebar-body {
+            padding: 1.25rem;
+        }
+    }
+
+    .gov-directory-card {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.625rem;
+        padding: 1.5rem;
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+        height: 100%;
+        transition: box-shadow 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+
+        &:hover {
+            border-color: var(--color-csc-red);
+            box-shadow: 0 4px 16px rgba(236, 28, 45, 0.09);
+            transform: translateY(-2px);
+
+            & .gov-directory-icon {
+                background-color: var(--color-csc-red);
+                color: white;
+            }
+        }
+    }
+
+    .gov-directory-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 0.625rem;
+        background-color: #fde8ea;
+        color: var(--color-csc-red);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: background-color 0.22s ease, color 0.22s ease;
+    }
+
+    .gov-directory-type {
+        display: block;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 1.3px;
+        text-transform: uppercase;
+        color: var(--color-csc-red);
+        margin-bottom: 0.25rem;
+    }
+
+    .gov-directory-head {
+        font-size: 0.8rem;
+        color: var(--color-text-muted);
+        font-style: italic;
+        margin-bottom: 0.625rem;
+        line-height: 1.45;
+    }
+
+    .gov-directory-address {
+        font-size: 0.775rem;
+        color: var(--color-text-muted);
+        margin-bottom: 0.625rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+        line-height: 1.45;
+
+        & svg {
+            color: var(--color-csc-sky);
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+    }
+
+    .gov-directory-contacts {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+
+        & li {
+            font-size: 0.8rem;
+            color: var(--color-text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        & li svg {
+            color: var(--color-csc-sky);
+            flex-shrink: 0;
+        }
+
+        & li a {
+            color: var(--color-text-muted);
+
+            &:hover {
+                color: var(--color-csc-sky);
+            }
+        }
+    }
+
+    .directory-tabs {
+        border-bottom: 2px solid var(--color-border);
+        display: flex;
+        gap: 0;
+        flex-wrap: wrap;
+
+        & button {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--color-text-muted);
+            padding: 0.75rem 1.375rem;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.22s ease, border-color 0.22s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            white-space: nowrap;
+            background: none;
+            flex-shrink: 0;
+        }
+
+        & button:hover {
+            color: var(--color-csc-blue);
+            border-bottom-color: var(--color-border);
+        }
+
+        & button.active {
+            color: var(--color-csc-red);
+            border-bottom-color: var(--color-csc-red);
+        }
+    }
+
+    .tab-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 50px;
+        background-color: var(--color-section-alt);
+        color: var(--color-text-muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0 5px;
+        margin-left: 0.375rem;
+        transition: background-color 0.22s ease, color 0.22s ease;
+    }
+
+    button.active .tab-count {
+        background-color: #fde8ea;
+        color: var(--color-csc-red);
+    }
+
+    .charter-intro-card {
+        background-color: var(--color-csc-blue);
+        border-radius: 0.625rem;
+        padding: 2rem 2.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .btn-charter-dl {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: var(--color-csc-red);
+        color: white;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 0.625rem 1.5rem;
+        border-radius: 0.375rem;
+        border: 2px solid var(--color-csc-red);
+        white-space: nowrap;
+        transition: background-color 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+
+        &:hover {
+            background-color: var(--color-csc-red-dark);
+            border-color: var(--color-csc-red-dark);
+            color: white;
+            transform: translateY(-1px);
+        }
+    }
+
+    .btn-charter-secondary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: rgb(255 255 255 / 0.1);
+        color: rgb(255 255 255 / 0.82);
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding: 0.5rem 1.5rem;
+        border-radius: 0.375rem;
+        border: 1px solid rgb(255 255 255 / 0.22);
+        white-space: nowrap;
+        transition: background-color 0.22s ease, border-color 0.22s ease;
+
+        &:hover {
+            background-color: rgb(255 255 255 / 0.18);
+            border-color: rgb(255 255 255 / 0.4);
+            color: white;
+        }
+    }
+
+    .charter-div-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 1rem;
+        border-radius: 0.375rem;
+        border: 1px solid var(--color-border);
+        background-color: var(--color-surface);
+        color: var(--color-text-muted);
+        font-size: 0.8375rem;
+        font-weight: 500;
+        transition: all 0.22s ease;
+
+        &:hover {
+            border-color: var(--color-csc-blue);
+            color: var(--color-csc-blue);
+        }
+
+        &.active {
+            background-color: var(--color-csc-blue);
+            border-color: var(--color-csc-blue);
+            color: white;
+        }
+    }
+
+    .charter-div-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.875rem 1.25rem;
+        background-color: var(--color-csc-blue);
+        border-radius: 0.625rem 0.625rem 0 0;
+        color: white;
+
+        & svg {
+            color: rgb(255 255 255 / 0.7);
+        }
+
+        & h2 {
+            color: white;
+            font-size: 0.9375rem;
+            font-weight: 700;
+            margin: 0;
+        }
+    }
+
+    .charter-accordion {
+        border: 1px solid var(--color-border);
+        border-top: none;
+        border-radius: 0 0 0.625rem 0.625rem;
+        overflow: hidden;
+    }
+
+    .charter-accordion-item {
+        border-bottom: 1px solid var(--color-border);
+
+        &:last-child {
+            border-bottom: none;
+        }
+    }
+
+    .charter-accordion-btn {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 1rem 1.25rem;
+        background: var(--color-surface);
+        text-align: left;
+        gap: 0.875rem;
+        transition: background-color 0.22s ease;
+
+        &:hover {
+            background-color: var(--color-section-alt);
+        }
+
+        &[aria-expanded='true'] {
+            background-color: #e8eaf6;
+            border-bottom: 1px solid var(--color-border);
+
+            & .charter-svc-icon {
+                background-color: var(--color-csc-red);
+                color: white;
+            }
+
+            & .charter-accordion-chevron {
+                transform: rotate(180deg);
+                color: var(--color-csc-sky);
+            }
+        }
+    }
+
+    .charter-svc-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 0.375rem;
+        background-color: #fde8ea;
+        color: var(--color-csc-red);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: background-color 0.22s ease, color 0.22s ease;
+    }
+
+    .charter-svc-title {
+        flex: 1;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--color-csc-blue);
+        line-height: 1.35;
+    }
+
+    .charter-svc-type {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        padding: 0.2rem 0.625rem;
+        border-radius: 50px;
+        background-color: var(--color-section-alt);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .charter-accordion-chevron {
+        flex-shrink: 0;
+        transition: transform 0.22s ease, color 0.22s ease;
+    }
+
+    .charter-accordion-body {
+        padding: 1.25rem 1.375rem;
+        background-color: var(--color-surface);
+    }
+
+    .charter-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .charter-detail-block {
+        background-color: var(--color-section-alt);
+        border-radius: 0.375rem;
+        padding: 1rem;
+    }
+
+    .charter-detail-label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.675rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 0.625rem;
+
+        & svg {
+            color: var(--color-csc-red);
+        }
+    }
+
+    .charter-req-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+
+        & li {
+            font-size: 0.8375rem;
+            color: var(--color-text-muted);
+            line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.375rem;
+        }
+
+        & li::before {
+            content: '\00B7';
+            color: var(--color-csc-red);
+            font-weight: 900;
+            font-size: 1rem;
+            flex-shrink: 0;
+            line-height: 1.3;
+        }
+    }
+
+    .charter-detail-value {
+        font-size: 0.875rem;
+        color: var(--color-text);
+        font-weight: 600;
+    }
+
+    .charter-fee-free {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background-color: #d1fae5;
+        color: #065f46;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        padding: 0.2rem 0.625rem;
+        border-radius: 50px;
+    }
+
+    .charter-steps {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+
+        & li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.625rem;
+            font-size: 0.875rem;
+            color: var(--color-text-muted);
+            line-height: 1.55;
+        }
+    }
+
+    .charter-step-n {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background-color: var(--color-csc-red);
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    .svc-info-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.875rem;
+
+        &:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        & > svg:first-child {
+            color: var(--color-csc-red);
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        & strong {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.2rem;
+        }
+
+        & span {
+            display: block;
+            color: var(--color-text);
+            font-weight: 500;
+        }
+    }
+}
+
+
+/* ─── Dashboards and reports ───────────────────────────────────────────────
+ * The richer surfaces: a flat hero, raised cards with a soft shadow that
+ * lifts on hover, and a wider chart palette. These sit on top of the flat IMIS
+ * tokens above and are used only by dashboards, statistics and audit pages.
+ */
+@theme {
+    --color-chart-3: #12908e;
+    --color-chart-4: #8a5cc2;
+    --color-chart-5: #d99a00;
+    --color-chart-6: #d6457b;
+
+    --shadow-card: 0 1px 2px rgb(28 30 42 / 0.05), 0 4px 14px -4px rgb(42 51 143 / 0.1);
+    --shadow-card-hover: 0 2px 4px rgb(28 30 42 / 0.06), 0 12px 28px -8px rgb(42 51 143 / 0.22);
+}
+
+@utility surface-raised {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-card);
+}
+
+@utility surface-lift {
+    transition:
+        transform 160ms ease,
+        box-shadow 160ms ease,
+        border-color 160ms ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-card-hover);
+        border-color: color-mix(in srgb, var(--color-csc-blue-light) 35%, var(--color-border));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        transition: none;
+
+        &:hover {
+            transform: none;
+        }
+    }
+}
+
+/* A flat brand-colour surface for banners (no gradients anywhere in the app). */
+@utility hero-solid {
+    background-color: var(--color-csc-blue-dark);
+}
+
+/* Chart marks fade and draw in; with reduced motion they simply appear. */
+@keyframes chart-rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+}
+
+@keyframes chart-grow {
+    from {
+        transform: scaleY(0);
+    }
+}
+
+@keyframes chart-sweep {
+    from {
+        clip-path: inset(0 100% 0 0);
+    }
+}
+
+.chart-rise {
+    animation: chart-rise 420ms ease both;
+}
+
+.chart-grow {
+    transform-origin: bottom;
+    animation: chart-grow 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.chart-sweep {
+    animation: chart-sweep 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Missing-OR rows blink softly (ported from the legacy board's .row-missing-or): a red edge stripe stays put while the row tint breathes. Hovering the row stops the blink so it can be read and clicked. */
+@keyframes row-alert-pulse {
+    50% {
+        background-color: var(--color-danger-bg);
+    }
+}
+
+.row-missing-or > td {
+    animation: row-alert-pulse 1.5s ease-in-out infinite;
+}
+
+.row-missing-or > td:first-child {
+    box-shadow: inset 3px 0 0 0 var(--color-danger);
+}
+
+.row-missing-or:hover > td {
+    animation: none;
+    background-color: var(--color-danger-bg);
+}
+
+/* Confirms a status change landed on its row, then fades out. */
+@keyframes row-update-flash {
+    from {
+        background-color: #dcfce7;
+    }
+}
+
+.row-just-updated > td {
+    animation: row-update-flash 1.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .row-just-updated > td {
+        animation: none;
+    }
+
+    .row-missing-or > td {
+        animation: none;
+        background-color: var(--color-danger-bg);
+    }
+
+    .chart-rise,
+    .chart-grow,
+    .chart-sweep {
+        animation: none;
+    }
+}
+
+/* The kiosks are laptops on a counter, not wall screens: a smaller root size scales the whole kiosk (type, spacing, controls) so a form fits one wide view. */
+html.kiosk {
+    font-size: clamp(13px, 1.02vw, 15px);
+}
