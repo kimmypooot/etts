@@ -5,7 +5,7 @@ Goal: move ESD, the field offices and the kiosks from the legacy `/etts/` app to
 ## Before the day (any time earlier)
 
 1. **Hosting**: create `etts.cscro8.com` (staff) and the kiosk host(s) (`kiosk.cscro8.com`, plus the PACD host once named) pointing at the new app's `public/` folder. Cloudflare in front, HTTPS only.
-2. **Production `.env`**: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://etts.cscro8.com`, database credentials, `LEGACY_DB_*` (read only), `IMIS_SSO_URL`, `IMIS_PORTAL_URL`, `ETTS_KIOSK_DOMAINS`, `TRUSTED_PROXIES`, `ATTACHMENTS_ROOT` (a folder outside the web root), optionally `IMIS_FEED_KEY`.
+2. **Production `.env`**: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://etts.cscro8.com`, database credentials, `LEGACY_DB_*` (read only; in production the legacy `esd_casts_*` tables are in the main IMIS database `u390694310_cscro8`, not a separate `etts_legacy`), `IMIS_SSO_URL`, `IMIS_PORTAL_URL`, `ETTS_KIOSK_DOMAINS`, `TRUSTED_PROXIES`, `ATTACHMENTS_ROOT` (a folder outside the web root), optionally `IMIS_FEED_KEY`.
 3. **IMIS**: register ETTS (url `https://etts.cscro8.com/sso`, roles `admin` and `field_office`), add the host to `SSO_HUB_HOSTS`.
 4. **Access**: for each of the 11 ERIS Admin and 22 ERIS User holders, grant the ETTS role in IMIS (`admin` or `field_office`). Field office staff need an IMIS organisational unit that matches `offices.imis_code` (see `config/etts.php`, `imis_office_codes`). Anyone without a unit signs in with no office and sees nothing.
 5. **Deploy** the code, `composer install --no-dev`, `npm ci && npm run build`, `php artisan migrate --force`, `php artisan config:cache route:cache view:cache`.
