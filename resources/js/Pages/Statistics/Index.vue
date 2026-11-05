@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -289,7 +290,7 @@ const officeOptions = [{ value: '', label: 'All offices' }, ...props.offices];
                         <tbody class="divide-y divide-border">
                             <tr v-for="row in drill.data" :key="row.id">
                                 <td class="px-3 py-2 whitespace-nowrap"><a :href="`/admin/transactions/${row.id}/edit`" class="font-medium text-primary hover:underline">#{{ row.id }}</a></td>
-                                <td class="px-3 py-2 font-medium">{{ row.name }}</td>
+                                <td class="px-3 py-2 font-medium">{{ personName(row.name) }}</td>
                                 <td class="px-3 py-2">{{ spels ? row.eligibility ?? '—' : row.type }}</td>
                                 <td class="px-3 py-2">{{ row.office }}</td>
                                 <td class="px-3 py-2 whitespace-nowrap">{{ formatDate(row.filed) }}</td>

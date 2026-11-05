@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed, ref, watch } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -87,7 +88,7 @@ const inputClass =
                         </td>
                         <td class="text-text-muted">#{{ row.id }}</td>
                         <td class="font-medium">
-                            {{ row.name }}
+                            {{ personName(row.name) }}
                             <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
                         </td>
                         <td class="text-sm whitespace-nowrap">{{ formatDate(row.date) }}</td>

@@ -33,6 +33,39 @@ class TransactionScreensTest extends TestCase
         return Transaction::factory()->create(['transaction_status' => $status, ...$extra]);
     }
 
+    // ─── Status chips ─────────────────────────────────────────────────────
+
+    public function test_the_status_counts_follow_the_other_filters_but_not_the_status_filter(): void
+    {
+        $this->make(TransactionStatus::Received, ['office_id' => 1, 'lname' => 'Cruz']);
+        $this->make(TransactionStatus::Received, ['office_id' => 2, 'lname' => 'Lim']);
+        $this->make(TransactionStatus::Submitted, ['office_id' => 2, 'lname' => 'Uy']);
+
+        $received = TransactionStatus::Received->value;
+        $submitted = TransactionStatus::Submitted->value;
+
+        // Everything on the board, every active status present (zero included).
+        $this->actingAs($this->admin)->get('/admin/transactions')->assertInertia(fn (Assert $page) => $page
+            ->where("statusCounts.{$received}", 2)->where("statusCounts.{$submitted}", 1)->where('statusCounts.Completed', 0));
+
+        // Another filter narrows the counts...
+        $this->actingAs($this->admin)->get('/admin/transactions?office=2')->assertInertia(fn (Assert $page) => $page
+            ->where("statusCounts.{$received}", 1)->where("statusCounts.{$submitted}", 1));
+
+        // ...but choosing a status does not hide the others' counts.
+        $this->actingAs($this->admin)->get("/admin/transactions?status={$submitted}")->assertInertia(fn (Assert $page) => $page
+            ->where("statusCounts.{$received}", 2)->where("statusCounts.{$submitted}", 1));
+    }
+
+    public function test_a_field_office_counts_only_its_own_records(): void
+    {
+        $this->make(TransactionStatus::Received, ['office_id' => 1]);
+        $this->make(TransactionStatus::Received, ['office_id' => 2]);
+        $fo = User::factory()->create(['office_id' => 2]);
+
+        $this->actingAs($fo)->get('/fo/transactions')->assertInertia(fn (Assert $page) => $page
+            ->where('statusCounts.'.TransactionStatus::Received->value, 1));
+    }
     // ─── Access ───────────────────────────────────────────────────────────
 
     public function test_guests_are_sent_to_sign_in(): void

@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -118,7 +119,7 @@ const inputClass =
                 <tr v-for="record in records.data" :key="record.id">
                     <td class="whitespace-nowrap text-text-muted">#{{ record.id }}</td>
                     <td class="font-medium">
-                        {{ record.name }}
+                        {{ personName(record.name) }}
                         <div class="text-xs font-normal text-text-muted">Filed {{ formatDate(record.transaction_date) }} · was {{ record.status }}</div>
                     </td>
                     <td class="text-sm">{{ record.type }}</td>

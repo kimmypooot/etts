@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed, ref } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -137,7 +138,7 @@ const formatWhen = (iso) =>
                 <ul v-else class="divide-y divide-border text-sm">
                     <li v-for="row in attention.awaitingReceipt" :key="row.id" class="flex items-center justify-between gap-3 py-2">
                         <span class="min-w-0">
-                            <span class="block truncate font-medium text-text">#{{ row.id }} {{ row.name }}</span>
+                            <span class="block truncate font-medium text-text">#{{ row.id }} {{ personName(row.name) }}</span>
                             <span class="text-xs text-text-muted">{{ row.office }} · sent {{ formatDate(row.since) }}</span>
                         </span>
                         <span

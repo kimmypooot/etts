@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { toneClasses } from '../UI/tones';
+import { statusLabel, statusTones } from './statusTones';
 
 /**
  * A transaction status as a pill. The word is always shown, so colour is never
@@ -10,21 +11,8 @@ const props = defineProps({
     status: { type: String, required: true },
 });
 
-const tones = {
-    submitted: 'neutral',
-    forwarded: 'info',
-    received: 'info',
-    Completed: 'warning',
-    Released: 'success',
-    Approved: 'success',
-    'Approved/Released': 'success',
-    Disapproved: 'danger',
-    Returned: 'warning',
-    Cancelled: 'danger',
-};
-
-const classes = computed(() => toneClasses[tones[props.status] ?? 'neutral']);
-const label = computed(() => props.status.charAt(0).toUpperCase() + props.status.slice(1));
+const classes = computed(() => toneClasses[statusTones[props.status] ?? 'neutral']);
+const label = computed(() => statusLabel(props.status));
 </script>
 
 <template>

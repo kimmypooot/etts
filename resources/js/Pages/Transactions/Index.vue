@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed, reactive, ref, watch } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -15,6 +16,7 @@ import Checkbox from '@/Components/Forms/Checkbox.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
+import StatusChips from '@/Components/Transactions/StatusChips.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
 import { useAuthorization } from '@/Composables/useAuthorization';
 import { confirm } from '@/Composables/useDialog';
@@ -26,6 +28,7 @@ const props = defineProps({
     transactions: { type: Object, required: true },
     filters: { type: Object, required: true },
     counts: { type: Object, required: true },
+    statusCounts: { type: Object, required: true },
     options: { type: Object, required: true },
 });
 
@@ -261,6 +264,8 @@ const inputClass =
             </button>
         </div>
 
+        <StatusChips v-model="filters.status" :counts="statusCounts" />
+
         <div class="mb-4 grid gap-3 surface-raised p-4 sm:grid-cols-2 lg:grid-cols-7">
             <div class="relative sm:col-span-2">
                 <label for="search" class="sr-only">Search</label>
@@ -279,12 +284,12 @@ const inputClass =
                 <label for="office" class="sr-only">Office</label>
                 <Select id="office" v-model="filters.office" :options="officeOptions" />
             </div>
-            <div class="flex items-center gap-2 sm:col-span-2">
+            <div class="flex min-w-0 items-center gap-2 sm:col-span-2">
                 <label for="from" class="sr-only">From</label>
-                <input id="from" v-model="filters.from" type="date" :class="inputClass" />
+                <input id="from" v-model="filters.from" type="date" :class="[inputClass, 'min-w-0']" />
                 <span class="text-text-muted" aria-hidden="true">–</span>
                 <label for="to" class="sr-only">To</label>
-                <input id="to" v-model="filters.to" type="date" :class="inputClass" />
+                <input id="to" v-model="filters.to" type="date" :class="[inputClass, 'min-w-0']" />
             </div>
             <div v-if="anyFilter" class="sm:col-span-2 lg:col-span-6">
                 <Button variant="ghost" size="sm" @click="clearFilters">
@@ -345,7 +350,7 @@ const inputClass =
                     </td>
                     <td class="whitespace-nowrap text-text-muted">#{{ row.id }}</td>
                     <td class="min-w-44 font-medium">
-                        {{ row.name }}
+                        {{ personName(row.name) }}
                         <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
                     </td>
                     <td class="text-sm whitespace-nowrap" :title="row.type">{{ shortType(row.type) }}</td>
@@ -353,7 +358,8 @@ const inputClass =
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
                     <td class="text-right whitespace-nowrap">
-                        <div class="flex max-w-[19rem] flex-wrap items-center justify-end gap-1">
+                        <div class="flex items-center justify-end gap-2">
+                        <div class="flex max-w-[17rem] flex-wrap items-center justify-end gap-1">
                             <Button
                                 v-for="action in can('transactions.process') ? row.actions : []"
                                 :key="action.kind + action.status"
@@ -363,14 +369,15 @@ const inputClass =
                             >
                                 {{ action.label }}
                             </Button>
-                            <Button v-if="can('transactions.manage')" variant="ghost" size="sm" :href="`/admin/transactions/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`">
+                        </div>
+                        <div class="flex shrink-0 items-center">
+                            <Button v-if="can('transactions.manage')" variant="ghost" size="sm" :href="`/admin/transactions/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
                                 <Icon name="pencil" size="sm" />
-                                Edit
                             </Button>
-                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" @click="viewing = row">
+                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
                                 <Icon name="clock" size="sm" />
-                                History
                             </Button>
+                        </div>
                         </div>
                     </td>
                 </tr>
@@ -389,7 +396,7 @@ const inputClass =
         <Modal :open="acting !== null" :title="acting?.action.label ?? ''" tone="primary" icon="check" @close="acting = null">
             <form v-if="acting" id="action-form" class="space-y-4" @submit.prevent="submitAction">
                 <p class="text-sm text-text-muted">
-                    #{{ acting.row.id }} · {{ acting.row.name }} · <TransactionStatusBadge :status="acting.row.status" />
+                    #{{ acting.row.id }} · {{ personName(acting.row.name) }} · <TransactionStatusBadge :status="acting.row.status" />
                 </p>
                 <TextInput id="action-date" v-model="actionForm.date" type="date" label="Date" required :invalid="!!actionForm.errors.date" />
                 <p v-if="actionForm.errors.date" class="text-sm text-danger">{{ actionForm.errors.date }}</p>
@@ -432,7 +439,7 @@ const inputClass =
         <!-- Quick edit: the fields staff correct most -->
         <Modal :open="quick !== null" :title="quick ? `Quick edit #${quick.id}` : ''" tone="primary" icon="pencil" @close="quick = null">
             <form id="quick-form" class="space-y-4" @submit.prevent="submitQuick">
-                <p v-if="quick" class="text-sm text-text-muted">{{ quick.name }}</p>
+                <p v-if="quick" class="text-sm text-text-muted">{{ personName(quick.name) }}</p>
                 <TextInput id="quick-or" v-model="quickForm.official_receipt" label="OR number" :invalid="!!quickForm.errors.official_receipt" />
                 <p v-if="quickForm.errors.official_receipt" class="text-sm text-danger">{{ quickForm.errors.official_receipt }}</p>
                 <div class="grid gap-3 sm:grid-cols-3">

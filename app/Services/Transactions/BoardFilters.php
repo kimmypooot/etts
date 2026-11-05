@@ -44,6 +44,27 @@ final class BoardFilters
     }
 
     /**
+     * How many records each status of the board holds under every other filter
+     * (the status filter itself is left out, so the chips show what each one
+     * would give). The model's office scope applies, so a field office counts
+     * only its own. Every status of the board is present, zero included.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, int>
+     */
+    public static function statusCounts(array $filters): array
+    {
+        $found = self::query([...$filters, 'status' => null])
+            ->toBase()
+            ->selectRaw('transaction_status, count(*) as total')
+            ->groupBy('transaction_status')
+            ->pluck('total', 'transaction_status')
+            ->all();
+
+        return collect(self::statuses($filters['board']))->mapWithKeys(fn (string $status) => [$status => (int) ($found[$status] ?? 0)])->all();
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      * @return Builder<Transaction>
      */

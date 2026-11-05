@@ -74,6 +74,7 @@ class TransactionController extends Controller
         return Inertia::render('Fo/Transactions/Index', [
             'transactions' => $transactions,
             'filters' => $filters,
+            'statusCounts' => BoardFilters::statusCounts($filters),
             'counts' => [
                 'active' => Transaction::whereIn('transaction_status', BoardFilters::statuses('active'))->count(),
                 'history' => Transaction::whereIn('transaction_status', BoardFilters::statuses('history'))->count(),

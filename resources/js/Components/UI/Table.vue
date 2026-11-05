@@ -51,6 +51,31 @@ defineProps({
     padding: 0.75rem 1rem;
 }
 
+/* A sort button is a <button>, which does not inherit the header's casing: make it read like the other headers. */
+.table-styled :deep(th button) {
+    text-transform: inherit;
+    letter-spacing: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+}
+
+/* The sort direction, from the header's own aria-sort (a dim double arrow when it can be sorted). */
+.table-styled :deep(th[aria-sort] button)::after {
+    content: '↕';
+    margin-left: 0.35rem;
+    opacity: 0.4;
+}
+
+.table-styled :deep(th[aria-sort='ascending'] button)::after {
+    content: '↑';
+    opacity: 1;
+}
+
+.table-styled :deep(th[aria-sort='descending'] button)::after {
+    content: '↓';
+    opacity: 1;
+}
+
 .table-styled :deep(td) {
     padding: 0.75rem 1rem;
     color: var(--color-text);

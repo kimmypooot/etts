@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -111,7 +112,7 @@ const cards = computed(() => [
                     <ul v-else class="divide-y divide-border text-sm">
                         <li v-for="row in aging" :key="row.id" class="flex items-center justify-between gap-3 py-2.5">
                             <span class="min-w-0">
-                                <Link :href="`/fo/transactions/${row.id}/edit`" class="block truncate font-medium text-primary hover:underline">#{{ row.id }} {{ row.name }}</Link>
+                                <Link :href="`/fo/transactions/${row.id}/edit`" class="block truncate font-medium text-primary hover:underline">#{{ row.id }} {{ personName(row.name) }}</Link>
                                 <span class="text-xs text-text-muted">{{ row.type }} · filed {{ formatDate(row.date) }}</span>
                             </span>
                             <span class="shrink-0 rounded-full bg-warning-bg px-2.5 py-0.5 text-xs font-semibold text-warning">{{ row.days }} days</span>

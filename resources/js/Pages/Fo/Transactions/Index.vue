@@ -1,4 +1,5 @@
 <script setup>
+import { personName } from '@/Utils/text.js';
 import { computed, reactive, ref, watch } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import StaffLayout from '@/Layouts/StaffLayout.vue';
@@ -14,6 +15,7 @@ import Select from '@/Components/Forms/Select.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
+import StatusChips from '@/Components/Transactions/StatusChips.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
 import { formatDate } from '@/Utils/format.js';
 import { useRowFlash } from '@/Composables/useRowFlash';
@@ -23,6 +25,7 @@ const props = defineProps({
     transactions: { type: Object, required: true },
     filters: { type: Object, required: true },
     counts: { type: Object, required: true },
+    statusCounts: { type: Object, required: true },
     options: { type: Object, required: true },
 });
 
@@ -142,6 +145,8 @@ const inputClass =
             </button>
         </div>
 
+        <StatusChips v-model="filters.status" :counts="statusCounts" />
+
         <div class="mb-4 grid gap-3 surface-raised p-4 sm:grid-cols-2 lg:grid-cols-5">
             <div class="relative sm:col-span-2">
                 <label for="search" class="sr-only">Search</label>
@@ -156,12 +161,12 @@ const inputClass =
                 <label for="status" class="sr-only">Status</label>
                 <Select id="status" v-model="filters.status" :options="statusOptions" />
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex min-w-0 items-center gap-2">
                 <label for="from" class="sr-only">From</label>
-                <input id="from" v-model="filters.from" type="date" :class="inputClass" />
+                <input id="from" v-model="filters.from" type="date" :class="[inputClass, 'min-w-0']" />
                 <span class="text-text-muted" aria-hidden="true">–</span>
                 <label for="to" class="sr-only">To</label>
-                <input id="to" v-model="filters.to" type="date" :class="inputClass" />
+                <input id="to" v-model="filters.to" type="date" :class="[inputClass, 'min-w-0']" />
             </div>
             <div v-if="anyFilter" class="sm:col-span-2 lg:col-span-5">
                 <Button variant="ghost" size="sm" @click="clearFilters"><Icon name="close" size="sm" />Clear filters</Button>
@@ -186,26 +191,28 @@ const inputClass =
                 <tr v-for="row in transactions.data" :key="row.id" :class="{ 'row-missing-or': !row.official_receipt, 'row-just-updated': isFlashing(row.id) }">
                     <td class="whitespace-nowrap text-text-muted">#{{ row.id }}</td>
                     <td class="min-w-44 font-medium">
-                        {{ row.name }}
+                        {{ personName(row.name) }}
                         <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
                     </td>
                     <td class="text-sm whitespace-nowrap" :title="row.type">{{ shortType(row.type) }}</td>
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
                     <td class="text-right whitespace-nowrap">
-                        <div class="flex max-w-[19rem] flex-wrap items-center justify-end gap-1">
+                        <div class="flex items-center justify-end gap-2">
+                        <div class="flex max-w-[17rem] flex-wrap items-center justify-end gap-1">
                             <Button v-if="row.can_forward" variant="secondary" size="sm" @click="openForward(row)">Forward to RO</Button>
-                            <Button v-if="row.can_work" variant="ghost" size="sm" :href="`${base}/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`">
+                        </div>
+                        <div class="flex shrink-0 items-center">
+                            <Button v-if="row.can_work" variant="ghost" size="sm" :href="`${base}/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
                                 <Icon name="pencil" size="sm" />
-                                Edit
                             </Button>
-                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" @click="viewing = row">
+                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
                                 <Icon name="clock" size="sm" />
-                                History
                             </Button>
-                            <Button v-if="row.can_work" variant="ghost" size="sm" :aria-label="`Delete transaction ${row.id}`" @click="openDelete(row)">
+                            <Button v-if="row.can_work" variant="ghost" size="sm" :aria-label="`Delete transaction ${row.id}`" title="Delete" icon-only @click="openDelete(row)">
                                 <Icon name="trash" size="sm" />
                             </Button>
+                        </div>
                         </div>
                     </td>
                 </tr>
@@ -217,7 +224,7 @@ const inputClass =
 
         <Modal :open="forwarding !== null" title="Forward to the Regional Office" tone="primary" icon="upload" @close="forwarding = null">
             <form v-if="forwarding" id="forward-form" class="space-y-4" @submit.prevent="submitForward">
-                <p class="text-sm text-text-muted">#{{ forwarding.id }} · {{ forwarding.name }}</p>
+                <p class="text-sm text-text-muted">#{{ forwarding.id }} · {{ personName(forwarding.name) }}</p>
                 <TextInput id="forward-date" v-model="forwardForm.date" type="date" label="Date sent" required :invalid="!!forwardForm.errors.date" />
                 <p v-if="forwardForm.errors.date" class="text-sm text-danger">{{ forwardForm.errors.date }}</p>
                 <p class="text-xs text-text-muted">To send several at once with a routing slip, use a transmittal instead.</p>
@@ -233,7 +240,7 @@ const inputClass =
         <Modal :open="deleting !== null" :title="deleting ? `Delete #${deleting.id}` : ''" tone="danger" icon="trash" @close="deleting = null">
             <form v-if="deleting" id="delete-form" class="space-y-4" @submit.prevent="submitDelete">
                 <Alert tone="warning">
-                    {{ deleting.name }} is moved to your office's deleted records with your name, the time and this reason. Once the Regional Office has acted on a record, only ESD can delete it.
+                    {{ personName(deleting.name) }} is moved to your office's deleted records with your name, the time and this reason. Once the Regional Office has acted on a record, only ESD can delete it.
                 </Alert>
                 <FormGroup id="delete-reason" label="Reason" required :error="deleteForm.errors.reason">
                     <Select id="delete-reason" v-model="deleteForm.reason" :options="deleteReasons" required />
