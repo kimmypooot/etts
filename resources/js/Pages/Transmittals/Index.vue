@@ -151,7 +151,7 @@ const inputClass =
                     </td>
                     <td class="text-right whitespace-nowrap">
                         <Button variant="ghost" size="sm" :href="`${base}/${row.id}`">Open</Button>
-                        <Button variant="ghost" size="sm" :href="`${base}/${row.id}/slip`" :aria-label="`Print slip of ${row.number}`">
+                        <Button variant="ghost" size="sm" :href="`${base}/${row.id}/slip`" :aria-label="`Print slip of ${row.number}`" title="Print slip">
                             <Icon name="printer" size="sm" />
                             Slip
                         </Button>

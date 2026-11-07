@@ -44,6 +44,7 @@ onBeforeUnmount(() => {
             class="flex size-9 items-center justify-center rounded-full text-text hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             :class="open ? 'bg-surface-muted' : ''"
             aria-label="Open application switcher"
+            title="Switch application"
             aria-haspopup="true"
             :aria-expanded="open"
             aria-controls="app-switcher-panel"

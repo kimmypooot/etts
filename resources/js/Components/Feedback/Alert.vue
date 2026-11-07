@@ -56,6 +56,7 @@ const meta = computed(() => toneMeta[props.tone]);
             type="button"
             class="shrink-0 rounded-md p-1 hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             aria-label="Dismiss"
+            title="Dismiss"
             @click="dismiss"
         >
             <Icon name="close" size="sm" />

@@ -142,7 +142,7 @@ const inputClass =
                     <td><Badge :tone="props.filters.source === 'legacy' ? 'neutral' : 'info'">{{ entry.action }}</Badge></td>
                     <td class="max-w-xl text-sm break-words">{{ entry.details }}</td>
                     <td class="text-right whitespace-nowrap">
-                        <Button v-if="entry.record_id" variant="ghost" size="sm" :aria-label="`History of transaction ${entry.record_id}`" @click="viewing = { id: entry.record_id, name: `Transaction #${entry.record_id}`, type: '', status: null }">
+                        <Button v-if="entry.record_id" variant="ghost" size="sm" :aria-label="`History of transaction ${entry.record_id}`" title="History" @click="viewing = { id: entry.record_id, name: `Transaction #${entry.record_id}`, type: '', status: null }">
                             #{{ entry.record_id }}
                         </Button>
                     </td>

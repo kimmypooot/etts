@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\ApplyActiveOffice;
 use App\Models\AuditLog;
 use App\Models\Office;
 use App\Models\User;
@@ -108,11 +109,14 @@ class ImisSsoController extends Controller
             'last_login_at' => now(),
         ])->save();
 
+        $user->extraOffices()->sync($this->headedOfficeIds($imis, $role, $user->office_id));
 
         AuditLog::record('login', $user, after: ['method' => 'imis', 'role' => $role->value], user: $user, request: $request);
 
         Auth::login($user);
         $request->session()->regenerate();
+        // A new sign-in asks again which office to work as.
+        $request->session()->forget(ApplyActiveOffice::SESSION_KEY);
 
         // So signing out of IMIS can end this session (ImisSsoLogoutController).
         if (is_string($imis['sid'] ?? null) && strlen($imis['sid']) === 64) {
@@ -129,6 +133,26 @@ class ImisSsoController extends Controller
         }
 
         return redirect()->intended(route('dashboard'));
+    }
+
+    /**
+     * The ETTS offices of the other offices IMIS says the person heads today
+     * (`headed_offices`: an officer-in-charge or concurrent director), apart from
+     * their own. Field office users only; an office ETTS does not know is skipped.
+     *
+     * @param  array<string, mixed>  $imis
+     * @return list<int>
+     */
+    private function headedOfficeIds(array $imis, UserRole $role, ?int $homeId): array
+    {
+        if ($role !== UserRole::FieldOffice || ! is_array($imis['headed_offices'] ?? null)) {
+            return [];
+        }
+
+        return collect($imis['headed_offices'])
+            ->map(fn ($office) => is_array($office) ? Office::forImisCode($office['code'] ?? null)?->id : null)
+            ->filter(fn ($id) => $id !== null && $id !== $homeId)
+            ->unique()->values()->all();
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ApplyActiveOffice;
 use App\Http\Middleware\ConfigureKioskSession;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\HandleKioskInertia;
@@ -42,8 +43,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(
             prepend: [RestrictKioskHost::class],
-            append: [HandleInertiaRequests::class],
+            append: [ApplyActiveOffice::class, HandleInertiaRequests::class],
         );
+
+        // Before route binding, so a record is looked up as the office chosen.
+        $middleware->prependToPriorityList(before: SubstituteBindings::class, prepend: ApplyActiveOffice::class);
 
         // The kiosk is not the staff app: its own session cookie and policy, its
         // own CSRF token, strict headers, and nothing shared from the staff side.

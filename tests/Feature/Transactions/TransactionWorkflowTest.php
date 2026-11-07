@@ -282,7 +282,7 @@ class TransactionWorkflowTest extends TestCase
         $this->assertSame(['Forward to RO'], $labels($this->spels(TransactionStatus::Submitted)));
         $this->assertSame(['Mark received'], $labels($this->spels(TransactionStatus::Forwarded)));
         $this->assertSame(['Approve', 'Disapprove', 'Return to applicant'], $labels($this->spels(TransactionStatus::Received)));
-        $this->assertSame(['Mark completed', 'Cancel'], $labels($this->cert(TransactionStatus::Received)));
+        $this->assertSame(['Mark completed', 'Cancel transaction'], $labels($this->cert(TransactionStatus::Received)));
         $this->assertSame(['Mark released'], $labels($this->cert(TransactionStatus::Completed)));
         $this->assertSame([], $labels($this->cert(TransactionStatus::Released)));
         $this->assertSame(['Mark approved and released'], $labels($this->spels(TransactionStatus::Approved)));

@@ -18,3 +18,17 @@ export const statusTones = {
 };
 
 export const statusLabel = (status) => status.charAt(0).toUpperCase() + status.slice(1);
+
+/** The legacy board's solid fill per status (white text); see `--color-st-*` in app.css. */
+export const statusFills = {
+    submitted: 'bg-st-submitted',
+    forwarded: 'bg-st-forwarded',
+    received: 'bg-st-received',
+    Completed: 'bg-st-completed',
+    Approved: 'bg-st-approved',
+    'Approved/Released': 'bg-st-approved',
+    Released: 'bg-st-released',
+    Returned: 'bg-st-returned',
+    Disapproved: 'bg-st-disapproved',
+    Cancelled: 'bg-st-cancelled',
+};

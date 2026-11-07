@@ -162,7 +162,7 @@ const linkClass = (href) => {
         <template v-for="entry in entries" :key="entry.type === 'link' ? entry.href : entry.label">
             <p
                 v-if="entry.type === 'heading'"
-                class="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide uppercase first:mt-0"
+                class="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide first:mt-0"
                 :class="variant === 'admin' ? 'text-text-muted' : 'text-white/70'"
             >
                 {{ entry.label }}
@@ -213,7 +213,7 @@ const linkClass = (href) => {
                         <template v-else>
                             <button
                                 type="button"
-                                class="flex w-full items-center gap-2 rounded-md py-1.5 pr-3 pl-9 text-left text-xs font-semibold tracking-wide uppercase transition-colors hover:bg-info-bg/60 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                                class="flex w-full items-center gap-2 rounded-md py-1.5 pr-3 pl-9 text-left text-xs font-semibold tracking-wide transition-colors hover:bg-info-bg/60 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                                 :class="holdsActive(item) ? 'text-primary' : 'text-text-muted'"
                                 :aria-expanded="isExpanded(item)"
                                 :aria-controls="sectionId(item)"

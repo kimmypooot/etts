@@ -15,6 +15,7 @@ import Select from '@/Components/Forms/Select.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
+import TransactionTypeBadge from '@/Components/Transactions/TransactionTypeBadge.vue';
 import StatusChips from '@/Components/Transactions/StatusChips.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
 import { formatDate } from '@/Utils/format.js';
@@ -102,7 +103,6 @@ const openDelete = (row) => {
 const submitDelete = () =>
     deleteForm.transform((data) => ({ ...data, ids: [deleting.value.id] })).post(`${base}/delete`, { preserveScroll: true, onSuccess: () => (deleting.value = null) });
 
-const shortType = (type) => ({ 'Special Eligibility Application': 'SPELS', 'Certification and Authentication': 'Cert. + Auth.' })[type] ?? type;
 
 const inputClass =
     'block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-xs focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
@@ -194,7 +194,7 @@ const inputClass =
                         {{ personName(row.name) }}
                         <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
                     </td>
-                    <td class="text-sm whitespace-nowrap" :title="row.type">{{ shortType(row.type) }}</td>
+                    <td><TransactionTypeBadge :type="row.type" /></td>
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
                     <td class="text-right whitespace-nowrap">

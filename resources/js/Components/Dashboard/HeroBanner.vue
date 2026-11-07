@@ -1,8 +1,8 @@
 <script setup>
 /**
- * The banner at the top of a dashboard: a flat brand-colour banner with a soft
+ * The banner at the top of a dashboard: a brand-colour banner over the CSC facade photo with a soft
  * dot pattern, a greeting, a line of context, and quick actions. Text is
- * white on the dark blue (well above AA contrast). The cards
+ * white on the brand blue (well above AA contrast). The cards
  * below it pull up over its bottom edge (`-mt-10`) for depth.
  */
 defineProps({
@@ -14,6 +14,10 @@ defineProps({
 
 <template>
     <section class="hero-solid relative overflow-hidden rounded-2xl px-6 pt-7 pb-16 text-white shadow-card sm:px-8" aria-labelledby="hero-title">
+        <!-- Decorative photo under a brand-blue tint, so the text keeps its contrast. -->
+        <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('/images/cscbg_facade.jpeg')" aria-hidden="true" />
+        <div class="absolute inset-0 bg-linear-to-br from-csc-blue/92 via-csc-blue/90 to-csc-blue-dark/95" aria-hidden="true" />
+
         <svg class="pointer-events-none absolute inset-0 size-full opacity-[0.07]" aria-hidden="true">
             <defs>
                 <pattern id="hero-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.4" fill="white" /></pattern>

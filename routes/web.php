@@ -13,6 +13,7 @@ use App\Http\Controllers\Fo;
 use App\Http\Controllers\ImisSummaryController;
 use App\Http\Controllers\KioskAdminController;
 use App\Http\Controllers\LegacySyncController;
+use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\PeopleSearchController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\StatisticsController;
@@ -53,6 +54,10 @@ Route::post('/sso/logout', ImisSsoLogoutController::class)->middleware('throttle
 Route::get('/api/imis/summary', ImisSummaryController::class)->middleware('throttle:60,1')->name('api.imis.summary');
 
 Route::middleware('auth')->group(function () {
+    // For someone who works as more than one office: choose, then switch from the header.
+    Route::get('/office', [OfficeController::class, 'choose'])->name('office.choose');
+    Route::post('/office', [OfficeController::class, 'switch'])->name('office.switch');
+
     Route::get('/people/search', PeopleSearchController::class)->middleware('throttle:60,1')->name('people.search');
 
     Route::prefix('fo')->name('fo.')->group(function () {

@@ -88,6 +88,7 @@ const groupClass = 'border-b border-border py-1';
             type="button"
             class="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             :aria-label="`Account menu for ${user.name}`"
+            :title="user.name"
             :aria-expanded="open"
             aria-controls="user-menu-panel"
             @click="open = !open"

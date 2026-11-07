@@ -16,10 +16,11 @@ import Checkbox from '@/Components/Forms/Checkbox.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
+import TransactionTypeBadge from '@/Components/Transactions/TransactionTypeBadge.vue';
 import StatusChips from '@/Components/Transactions/StatusChips.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
 import { useAuthorization } from '@/Composables/useAuthorization';
-import { confirm } from '@/Composables/useDialog';
+import { alert, confirm } from '@/Composables/useDialog';
 import { formatDate } from '@/Utils/format.js';
 import { useRowFlash } from '@/Composables/useRowFlash';
 import { useLiveRefresh } from '@/Composables/useLiveRefresh';
@@ -127,6 +128,9 @@ const openAction = (row, action) => {
     actionForm.clearErrors();
 };
 
+const actionHint = (action) =>
+    ({ forward: 'Send this record to the Regional Office', receive: 'Record that the Regional Office received it' })[action.kind] ?? `Set the status to ${action.status}`;
+
 const submitAction = () => {
     const { row, action } = acting.value;
     const url = { forward: 'forward', receive: 'receive', status: 'status' }[action.kind];
@@ -137,6 +141,9 @@ const submitAction = () => {
         onSuccess: () => {
             flash(row.id);
             acting.value = null;
+            if (action.status === 'Cancelled') {
+                alert({ title: 'Transaction cancelled', text: `#${row.id} · ${personName(row.name)} has been cancelled.`, icon: 'success' });
+            }
         },
     });
 };
@@ -221,7 +228,6 @@ const openQuick = (row) => {
 const submitQuick = () =>
     quickForm.patch(`/admin/transactions/${quick.value.id}/quick`, { preserveScroll: true, onSuccess: () => (quick.value = null) });
 
-const shortType = (type) => ({ 'Special Eligibility Application': 'SPELS', 'Certification and Authentication': 'Cert. + Auth.' })[type] ?? type;
 
 const inputClass =
     'block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-xs focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
@@ -310,12 +316,12 @@ const inputClass =
                 <label for="batch" class="sr-only">Status to apply</label>
                 <Select id="batch" v-model="batchTarget" :options="batchChoices" />
             </div>
-            <Button v-if="can('transactions.process')" size="sm" :disabled="!batchTarget" @click="applyBatch">Apply</Button>
+            <Button v-if="can('transactions.process')" size="sm" :disabled="!batchTarget" title="Apply the chosen status to the selected transactions" @click="applyBatch">Apply</Button>
             <Button v-if="can('transactions.delete')" variant="danger" size="sm" @click="openDelete(selected)">
                 <Icon name="trash" size="sm" />
                 Delete
             </Button>
-            <Button variant="ghost" size="sm" @click="selected = []">Clear selection</Button>
+            <Button variant="ghost" size="sm" title="Unselect all transactions" @click="selected = []">Clear selection</Button>
         </div>
 
         <Table :empty="transactions.data.length === 0">
@@ -353,7 +359,7 @@ const inputClass =
                         {{ personName(row.name) }}
                         <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
                     </td>
-                    <td class="text-sm whitespace-nowrap" :title="row.type">{{ shortType(row.type) }}</td>
+                    <td><TransactionTypeBadge :type="row.type" /></td>
                     <td class="whitespace-nowrap text-sm">{{ row.office }}</td>
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
@@ -365,6 +371,7 @@ const inputClass =
                                 :key="action.kind + action.status"
                                 :variant="action.status === 'Cancelled' || action.status === 'Disapproved' ? 'outline' : 'secondary'"
                                 size="sm"
+                                :title="actionHint(action)"
                                 @click="openAction(row, action)"
                             >
                                 {{ action.label }}
@@ -408,7 +415,7 @@ const inputClass =
                 </Alert>
             </form>
             <template #footer>
-                <Button variant="secondary" @click="acting = null">Cancel</Button>
+                <Button variant="secondary" @click="acting = null">Go back</Button>
                 <Button type="submit" form="action-form" :loading="actionForm.processing">{{ acting?.action.label }}</Button>
             </template>
         </Modal>

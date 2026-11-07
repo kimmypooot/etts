@@ -133,7 +133,7 @@ const inputClass =
                         <div v-if="record.note" class="mt-1 max-w-xs truncate text-xs text-text-muted" :title="record.note">{{ record.note }}</div>
                     </td>
                     <td class="text-right whitespace-nowrap">
-                        <Button variant="ghost" size="sm" :aria-label="`History of deleted transaction ${record.id}`" @click="viewing = { id: record.id, name: record.name, type: record.type, status: null }">
+                        <Button variant="ghost" size="sm" :aria-label="`History of deleted transaction ${record.id}`" title="History" @click="viewing = { id: record.id, name: record.name, type: record.type, status: null }">
                             <Icon name="clock" size="sm" />
                             History
                         </Button>

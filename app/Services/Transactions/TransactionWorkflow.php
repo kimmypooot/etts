@@ -229,7 +229,7 @@ final class TransactionWorkflow
             'Approved/Released' => 'Mark approved and released',
             'Disapproved' => 'Disapprove',
             'Returned' => 'Return to applicant',
-            'Cancelled' => 'Cancel',
+            'Cancelled' => 'Cancel transaction',
         ];
 
         foreach (TransactionStatus::allowedFor($type) as $candidate) {

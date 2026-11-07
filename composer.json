@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "cscro8/etts",
     "type": "project",
-    "description": "ETTS: Examination Transaction Tracking System for CSC Regional Office VIII, signed in through IMIS.",
+    "description": "ETTS: ESD Transactions Tracking System for CSC Regional Office VIII, signed in through IMIS.",
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {

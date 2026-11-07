@@ -1,6 +1,6 @@
 # ETTS v2 migration plan
 
-ETTS (Examination Transaction and Tracking System) is being rebuilt from the
+ETTS (ESD Transactions Tracking System) is being rebuilt from the
 legacy framework-less PHP app at `../etts` (reference only, never edit it) as
 a Laravel + Vue 3 + Inertia + Tailwind + MySQL app. It is a **separate app
 under the IMIS hub** (`../new-imis`), like JPortal, PROCTAD and `../new-eris`.

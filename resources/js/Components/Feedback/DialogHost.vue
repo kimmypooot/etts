@@ -134,6 +134,7 @@ const toastStyles = {
                         type="button"
                         class="shrink-0 rounded p-0.5 text-text-muted hover:text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                         aria-label="Dismiss notification"
+                        title="Dismiss"
                         @click="dismissToast(item.id)"
                     >
                         <Icon name="close" size="sm" />

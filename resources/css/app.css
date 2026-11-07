@@ -965,7 +965,7 @@
 
 /* A flat brand-colour surface for banners (no gradients anywhere in the app). */
 @utility hero-solid {
-    background-color: var(--color-csc-blue-dark);
+    background-color: var(--color-primary);
 }
 
 /* Chart marks fade and draw in; with reduced motion they simply appear. */
@@ -1052,4 +1052,27 @@
 /* The kiosks are laptops on a counter, not wall screens: a smaller root size scales the whole kiosk (type, spacing, controls) so a form fits one wide view. */
 html.kiosk {
     font-size: clamp(13px, 1.02vw, 15px);
+}
+
+/* Transaction status fills, carried over from the legacy ETTS board: one hue
+   per meaning, each at least 4.5:1 with white text. */
+@theme {
+    --color-st-to-be-received: #475569;
+    --color-st-submitted: #1d4ed8;
+    --color-st-forwarded: #4338ca;
+    --color-st-received: #b45309;
+    --color-st-completed: #047857;
+    --color-st-approved: #15803d;
+    --color-st-released: #0f766e;
+    --color-st-returned: #c2410c;
+    --color-st-disapproved: #b91c1c;
+    --color-st-cancelled: #7f1d1d;
+}
+
+/* Transaction type fills (the legacy SPELS purple, and blues for issuance). */
+@theme {
+    --color-type-spels: #6d28d9;
+    --color-type-cert: #0369a1;
+    --color-type-auth: #0f766e;
+    --color-type-cert-auth: #1d4ed8;
 }

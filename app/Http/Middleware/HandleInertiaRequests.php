@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\DeletedTransaction;
 use App\Models\KioskTerminal;
 use App\Models\Eligibility;
+use App\Models\Office;
 use App\Models\Transaction;
 use App\Models\Transmittal;
 use Illuminate\Http\Request;
@@ -35,6 +36,10 @@ class HandleInertiaRequests extends Middleware
                     'role' => $user->role->value,
                     'role_label' => $user->role->label(),
                     'office' => $user->office?->only('id', 'name', 'code'),
+                    // The offices a person who works as several can switch between (empty for everyone else).
+                    'offices' => count($ids = $user->workOfficeIds()) > 1
+                        ? Office::whereIn('id', $ids)->orderBy('name')->get(['id', 'name', 'code'])->map->only('id', 'name', 'code')->all()
+                        : [],
                 ] : null,
                 // For hiding controls only (useAuthorization); every route
                 // checks its policy regardless.

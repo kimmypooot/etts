@@ -107,6 +107,7 @@ onBeforeUnmount(() => {
                         class="shrink-0 rounded-md p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                         :class="tone === 'neutral' ? 'text-text-muted hover:bg-surface-muted hover:text-text' : 'text-white/85 hover:bg-white/15 hover:text-white'"
                         aria-label="Close dialog"
+                        title="Close"
                         @click="close"
                     >
                         <Icon name="close" size="sm" />

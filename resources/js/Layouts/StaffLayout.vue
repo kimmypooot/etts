@@ -5,6 +5,7 @@ import Icon from '../Components/UI/Icon.vue';
 import SidebarNav from '../Components/Navigation/SidebarNav.vue';
 import UserMenu from '../Components/Navigation/UserMenu.vue';
 import AppSwitcher from '../Components/Navigation/AppSwitcher.vue';
+import OfficeSwitcher from '../Components/Navigation/OfficeSwitcher.vue';
 
 /**
  * The staff shell, after IMIS's AppShell in its admin variant: a fixed top
@@ -43,18 +44,18 @@ const navItems = [
         ],
     },
     { label: 'Transmittals', href: '/admin/transmittals', icon: 'envelope', permission: 'transmittals.view' },
-    { label: 'Activity log', href: '/admin/activity', icon: 'activity', permission: 'activity.view' },
+    { label: 'Activity Log', href: '/admin/activity', icon: 'activity', permission: 'activity.view' },
 
     { heading: 'Statistics' },
-    { label: 'Special eligibility', href: '/admin/statistics', icon: 'chartBar', permission: 'transactions.view' },
-    { label: 'Issuance & authentication', href: '/admin/statistics?category=coe_auth', icon: 'documentText', permission: 'transactions.view' },
-    { label: 'Duplicate audit', href: '/admin/audit/duplicates', icon: 'shield', permission: 'transactions.view' },
+    { label: 'Special Eligibility', href: '/admin/statistics', icon: 'chartBar', permission: 'transactions.view' },
+    { label: 'Issuance & Authentication', href: '/admin/statistics?category=coe_auth', icon: 'documentText', permission: 'transactions.view' },
+    { label: 'Duplicate Audit', href: '/admin/audit/duplicates', icon: 'shield', permission: 'transactions.view' },
 
     { heading: 'Settings' },
-    { label: 'Eligibility types', href: '/admin/eligibilities', icon: 'tag', permission: 'eligibilities.manage' },
+    { label: 'Eligibility Types', href: '/admin/eligibilities', icon: 'tag', permission: 'eligibilities.manage' },
     { label: 'Kiosks', href: '/admin/kiosks', icon: 'desktop', permission: 'kiosks.manage' },
     { label: 'Staff', href: '/admin/users', icon: 'users', permission: 'activity.view' },
-    { label: 'Sync from legacy', href: '/admin/legacy-sync', icon: 'refresh', permission: 'activity.view' },
+    { label: 'Sync from Legacy', href: '/admin/legacy-sync', icon: 'refresh', permission: 'activity.view' },
 ];
 
 const STORAGE_KEY = 'etts.sidebar-open';
@@ -145,6 +146,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="rounded-md p-2 text-text hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 :aria-label="sidebarOpen ? 'Hide navigation menu' : 'Show navigation menu'"
+                :title="sidebarOpen ? 'Hide menu' : 'Show menu'"
                 aria-controls="app-sidebar"
                 :aria-expanded="sidebarOpen"
                 @click="setSidebar(!sidebarOpen)"
@@ -159,11 +161,12 @@ onBeforeUnmount(() => {
                 <img :src="logo" alt="CSC" class="h-9 w-auto" />
                 <span class="leading-tight">
                     <span class="block text-lg font-semibold text-primary">ETTS</span>
-                    <span class="hidden text-xs text-text-muted sm:block">Examination Transaction and Tracking System</span>
+                    <span class="hidden text-xs text-text-muted sm:block">ESD Transactions Tracking System</span>
                 </span>
             </Link>
 
             <div class="ml-auto flex items-center gap-1">
+                <OfficeSwitcher />
                 <AppSwitcher />
                 <UserMenu v-if="page.props.auth.user" :user="page.props.auth.user" />
             </div>
