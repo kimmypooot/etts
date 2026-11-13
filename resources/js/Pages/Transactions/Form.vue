@@ -8,7 +8,7 @@ import Icon from '@/Components/UI/Icon.vue';
 import Alert from '@/Components/Feedback/Alert.vue';
 import Select from '@/Components/Forms/Select.vue';
 import Field from '@/Components/Forms/Field.vue';
-import PersonInput from '@/Components/Forms/PersonInput.vue';
+import SignatoryPicker from '@/Components/Transactions/SignatoryPicker.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import FileInput from '@/Components/Forms/FileInput.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
@@ -283,18 +283,7 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                         <p v-if="!hasOriginal" class="text-sm text-text-muted">Upload the original document as Attachment 2 and save, to print the authenticated copy.</p>
                         <template v-else>
                             <p class="mb-3 text-sm text-text-muted">Prints Attachment 2 with the "Certified Authenticated Copy" stamp, the O.R. number and a QR code of this record.</p>
-                            <div class="mb-3 grid gap-3 sm:grid-cols-3">
-                                <PersonInput
-                                    id="signatory-name"
-                                    v-model="signatory.name"
-                                    placeholder="Signatory"
-                                    aria-label="Signatory"
-                                    :input-class="textareaClass"
-                                    @pick="(p) => { if (p.position) signatory.position = p.position; if (p.office) signatory.office = p.office; }"
-                                />
-                                <input v-model="signatory.position" type="text" placeholder="Position" aria-label="Position" :class="textareaClass" />
-                                <input v-model="signatory.office" type="text" placeholder="Office" aria-label="Office" :class="textareaClass" />
-                            </div>
+                            <SignatoryPicker v-model="signatory" class="mb-3" />
                             <Button type="button" variant="secondary" :disabled="!signatory.name.trim()" @click="printAuthenticatedCopy"><Icon name="printer" size="sm" />Print authenticated copy</Button>
                         </template>
                     </div>

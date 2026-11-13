@@ -207,6 +207,7 @@ class TransactionProcessTest extends TestCase
     {
         $received = $this->props($this->issuance());
         $this->assertSame('complete', $received['finish']);
+        $this->assertSame(TransactionStatus::Completed->value, $received['finishStatus']);
         $this->assertFalse($received['locked']);
         $this->assertStringStartsWith('vcas://Certification/Cruz/Ana/', $received['vcasUrl']);
 
@@ -215,6 +216,7 @@ class TransactionProcessTest extends TestCase
 
         $completed = $this->props($this->issuance(status: TransactionStatus::Completed));
         $this->assertSame('release', $completed['finish']);
+        $this->assertSame(TransactionStatus::Released->value, $completed['finishStatus']);
         $this->assertTrue($completed['locked']);
 
         $submitted = $this->props($this->issuance(status: TransactionStatus::Submitted));

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\TransactionStatus;
 use App\Http\Requests\ProcessStepRequest;
 use App\Models\AuditLog;
 use App\Models\Transaction;
@@ -51,7 +52,12 @@ class TransactionProcessController extends Controller
             ], array_keys(self::LABELS)),
             'step' => $requested >= 1 && $requested <= $first ? $requested : $first,
             'locked' => ProcessSteps::isLocked($transaction),
-            'finish' => ProcessSteps::finishAction($transaction),
+            'finish' => $finish = ProcessSteps::finishAction($transaction),
+            'finishStatus' => match ($finish) {
+                'complete' => TransactionStatus::Completed->value,
+                'release' => TransactionStatus::Released->value,
+                default => null,
+            },
             'vcasUrl' => str_contains($transaction->transaction_type->value, 'Certification') ? VcasLink::for($record) : null,
         ]);
     }

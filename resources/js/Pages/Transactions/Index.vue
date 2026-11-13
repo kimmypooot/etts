@@ -389,7 +389,7 @@ const inputClass =
                     </td>
                     <td class="sticky right-0 w-24 bg-surface text-right whitespace-nowrap">
                         <div class="flex items-center justify-end">
-                            <Button v-if="can('transactions.manage')" variant="ghost" size="sm" :href="`/admin/transactions/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
+                            <Button v-if="can('transactions.manage')" variant="ghost" size="sm" :href="`/admin/transactions/${row.id}/${row.type === 'Special Eligibility Application' ? 'edit' : 'process'}`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
                                 <Icon name="pencil" size="sm" />
                             </Button>
                             <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
