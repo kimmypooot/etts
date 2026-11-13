@@ -128,8 +128,27 @@ final class TransactionRecorder
     public function update(Transaction $transaction, array $data, User $actor, ?string $version = null, ?UploadedFile $attachment1 = null, ?UploadedFile $attachment2 = null): Transaction
     {
         $fields = $this->clean($data);
+        $stored = [];
 
-        return DB::transaction(function () use ($transaction, $fields, $actor, $version, $attachment1, $attachment2) {
+        try {
+            return $this->updateLocked($transaction, $fields, $actor, $version, $attachment1, $attachment2, $stored);
+        } catch (\Throwable $e) {
+            // The save was rolled back: do not leave its uploads behind with nothing pointing at them.
+            foreach ($stored as $name) {
+                $this->attachments->forget($name);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @param  list<string>  $stored  Receives the names of the files stored by this call.
+     */
+    private function updateLocked(Transaction $transaction, array $fields, User $actor, ?string $version, ?UploadedFile $attachment1, ?UploadedFile $attachment2, array &$stored): Transaction
+    {
+        return DB::transaction(function () use ($transaction, $fields, $actor, $version, $attachment1, $attachment2, &$stored) {
             $locked = Transaction::query()->with(['office', 'issuanceRequest'])->whereKey($transaction->getKey())->lockForUpdate()->first();
 
             if ($locked === null) {
@@ -169,6 +188,7 @@ final class TransactionRecorder
 
                 foreach ([1 => $attachment1, 2 => $attachment2] as $slot => $upload) {
                     if (($name = $this->attachments->store($upload)) !== null) {
+                        $stored[] = $name;
                         $values["attachment_{$slot}"] = $name;
                         $changed[] = "attachment_{$slot}";
                     }

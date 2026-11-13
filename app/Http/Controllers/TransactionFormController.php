@@ -6,6 +6,7 @@ use App\Enums\TransactionType;
 use App\Http\Requests\TransactionFormRequest;
 use App\Models\Office;
 use App\Models\Transaction;
+use App\Services\Transactions\ProcessSteps;
 use App\Services\Transactions\TransactionRecorder;
 use App\Services\Transactions\WorkflowException;
 use App\Support\TransactionFormPresenter;
@@ -60,6 +61,10 @@ class TransactionFormController extends Controller
 
     public function update(TransactionFormRequest $request, Transaction $transaction): RedirectResponse
     {
+        if ($transaction->transaction_type->isIssuance() && ProcessSteps::isLocked($transaction)) {
+            return $this->refuse(new WorkflowException('This record is completed or closed and can no longer be edited. Revert it first to correct it.'));
+        }
+
         try {
             $this->recorder->update(
                 $transaction,

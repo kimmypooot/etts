@@ -144,6 +144,38 @@ class TransactionFormTest extends TestCase
         $this->assertSame(1, AuditLog::where('action', 'transaction.status_changed')->where('subject_id', $record->id)->count());
     }
 
+    public function test_a_failed_update_leaves_no_uploaded_file_behind(): void
+    {
+        $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput());
+        $record = Transaction::sole();
+
+        // Fails after the upload is stored, inside the save.
+        IssuanceRequest::saving(fn () => throw new \RuntimeException('disk full'));
+
+        try {
+            $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", $this->certInput([
+                'attachment_1' => UploadedFile::fake()->image('id.jpg'),
+            ]));
+        } catch (\RuntimeException) {
+            // The exception surfaces in the test; what matters is the disk.
+        } finally {
+            IssuanceRequest::flushEventListeners();
+        }
+
+        $this->assertSame([], Storage::disk('attachments')->allFiles());
+    }
+
+    public function test_a_completed_or_released_certification_cannot_be_edited_through_the_form(): void
+    {
+        foreach ([TransactionStatus::Completed, TransactionStatus::Released, TransactionStatus::Cancelled] as $status) {
+            $record = Transaction::factory()->create(['transaction_type' => TransactionType::Certification, 'office_id' => 1, 'lname' => 'Keep', 'transaction_status' => $status]);
+
+            $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", $this->certInput(['lname' => 'Changed']))->assertSessionHas('error');
+
+            $this->assertSame('Keep', $record->fresh()->lname, $status->value);
+        }
+    }
+
     public function test_quick_editing_the_or_number_on_a_submitted_certification_receives_it(): void
     {
         $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput());
