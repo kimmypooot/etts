@@ -379,6 +379,20 @@ class KioskTest extends TestCase
         $this->device($token)->get('/kiosk/done')->assertRedirect('/kiosk');
     }
 
+    public function test_history_encryption_is_skipped_only_for_local_development_over_plain_http(): void
+    {
+        [, $token] = $this->pairedTerminal();
+        $encrypted = fn (string $url) => $this->device($token)->get($url)->assertOk()->viewData('page')['encryptHistory'] ?? false;
+
+        $this->app['env'] = 'local';
+        $this->assertFalse($encrypted('http://etts.test/kiosk/request/certification'), 'crypto.subtle is missing on plain http, so local http must not encrypt.');
+        $this->assertTrue($encrypted('https://etts.test/kiosk/request/certification'));
+        $this->assertTrue($encrypted('http://localhost/kiosk/request/certification'), 'localhost is a secure context.');
+
+        $this->app['env'] = 'production';
+        $this->assertTrue($encrypted('http://etts.test/kiosk/request/certification'), 'Outside local development history is always encrypted.');
+    }
+
     public function test_history_is_encrypted_and_cleared_so_back_shows_nothing_of_the_last_visitor(): void
     {
         [, $token] = $this->pairedTerminal();

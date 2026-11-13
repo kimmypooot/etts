@@ -19,12 +19,24 @@ class HandleKioskInertia extends Middleware
     /**
      * Page data kept by the browser for Back/Forward is encrypted, so a shared
      * terminal never leaves a visitor's answers readable in its history.
+     *
+     * The browser encrypts with crypto.subtle, which exists only in a secure
+     * context (HTTPS or localhost). On plain http every Inertia visit would
+     * hang, so local development over http (e.g. http://etts.test) skips it.
+     * Every other environment always encrypts: production must be HTTPS.
      */
     public function handle(Request $request, Closure $next)
     {
-        Inertia::encryptHistory();
+        Inertia::encryptHistory(! self::insecureLocal($request));
 
         return parent::handle($request, $next);
+    }
+
+    private static function insecureLocal(Request $request): bool
+    {
+        return app()->environment('local')
+            && ! $request->secure()
+            && ! in_array($request->getHost(), ['localhost', '127.0.0.1', '[::1]'], true);
     }
 
     /**
