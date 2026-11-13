@@ -12,6 +12,10 @@ import Icon from '@/Components/UI/Icon.vue';
 import Modal from '@/Components/Feedback/Modal.vue';
 import Alert from '@/Components/Feedback/Alert.vue';
 import Select from '@/Components/Forms/Select.vue';
+import FilterBar from '@/Components/Forms/FilterBar.vue';
+import FilterField from '@/Components/Forms/FilterField.vue';
+import SearchInput from '@/Components/Forms/SearchInput.vue';
+import DateRange from '@/Components/Forms/DateRange.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
@@ -61,8 +65,15 @@ const switchBoard = (board) => router.get(base, { board }, { preserveScroll: tru
 const sortBy = (column) => visit({ sort: column, dir: props.filters.sort === column && props.filters.dir === 'asc' ? 'desc' : 'asc' });
 const ariaSort = (column) => (props.filters.sort === column ? (props.filters.dir === 'asc' ? 'ascending' : 'descending') : 'none');
 
+const footerSummary = computed(() => {
+    const page = props.transactions;
+
+    return page.total === 0
+        ? '0 transactions'
+        : `Showing ${page.from.toLocaleString('en-PH')}–${page.to.toLocaleString('en-PH')} of ${page.total.toLocaleString('en-PH')} transactions`;
+});
+
 const typeOptions = [{ value: '', label: 'All types' }, ...props.options.types];
-const statusOptions = computed(() => [{ value: '', label: 'All statuses' }, ...props.options.statuses]);
 
 // ─── Forward one application ──────────────────────────────────────────────
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -145,33 +156,20 @@ const inputClass =
             </button>
         </div>
 
-        <StatusChips v-model="filters.status" :counts="statusCounts" />
-
-        <div class="mb-4 grid gap-3 surface-raised p-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div class="relative sm:col-span-2">
-                <label for="search" class="sr-only">Search</label>
-                <Icon name="search" size="sm" class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted" />
-                <input id="search" v-model="filters.search" type="search" placeholder="Name, OR number, ID or eligibility" :class="[inputClass, 'pl-9']" />
-            </div>
-            <div>
-                <label for="type" class="sr-only">Type</label>
+        <FilterBar :active="anyFilter" @clear="clearFilters">
+            <template #chips>
+                <StatusChips v-model="filters.status" :counts="statusCounts" />
+            </template>
+            <FilterField label="Search" for-id="search" grow>
+                <SearchInput id="search" v-model="filters.search" placeholder="Name, OR number, ID or eligibility" />
+            </FilterField>
+            <FilterField label="Type" for-id="type">
                 <Select id="type" v-model="filters.type" :options="typeOptions" />
-            </div>
-            <div>
-                <label for="status" class="sr-only">Status</label>
-                <Select id="status" v-model="filters.status" :options="statusOptions" />
-            </div>
-            <div class="flex min-w-0 items-center gap-2">
-                <label for="from" class="sr-only">From</label>
-                <input id="from" v-model="filters.from" type="date" :class="[inputClass, 'min-w-0']" />
-                <span class="text-text-muted" aria-hidden="true">–</span>
-                <label for="to" class="sr-only">To</label>
-                <input id="to" v-model="filters.to" type="date" :class="[inputClass, 'min-w-0']" />
-            </div>
-            <div v-if="anyFilter" class="sm:col-span-2 lg:col-span-5">
-                <Button variant="ghost" size="sm" @click="clearFilters"><Icon name="close" size="sm" />Clear filters</Button>
-            </div>
-        </div>
+            </FilterField>
+            <FilterField label="Filed between" for-id="from" wide>
+                <DateRange v-model:from="filters.from" v-model:to="filters.to" />
+            </FilterField>
+        </FilterBar>
 
         <Table :empty="transactions.data.length === 0">
             <template #empty>
@@ -179,30 +177,32 @@ const inputClass =
             </template>
             <thead>
                 <tr>
-                    <th scope="col">ID</th>
                     <th scope="col" :aria-sort="ariaSort('name')"><button type="button" class="font-semibold hover:underline" @click="sortBy('name')">Applicant</button></th>
                     <th scope="col">Type</th>
                     <th scope="col" :aria-sort="ariaSort('date')"><button type="button" class="font-semibold hover:underline" @click="sortBy('date')">Filed</button></th>
                     <th scope="col" :aria-sort="ariaSort('status')"><button type="button" class="font-semibold hover:underline" @click="sortBy('status')">Status</button></th>
-                    <th scope="col"><span class="sr-only">Actions</span></th>
+                    <th scope="col">Next step</th>
+                    <th scope="col" class="sticky right-0 w-28 bg-inherit"><span class="sr-only">Edit, history and delete</span></th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-for="row in transactions.data" :key="row.id" :class="{ 'row-missing-or': !row.official_receipt, 'row-just-updated': isFlashing(row.id) }">
-                    <td class="whitespace-nowrap text-text-muted">#{{ row.id }}</td>
-                    <td class="min-w-44 font-medium">
+                    <td class="min-w-48 font-medium">
                         {{ personName(row.name) }}
-                        <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
+                        <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-normal text-text-muted">
+                            <span class="tabular-nums">#{{ row.id }}</span>
+                            <span v-if="row.eligibility">· {{ row.eligibility }}</span>
+                            <span v-if="!row.official_receipt" class="rounded bg-danger-bg px-1.5 py-0.5 font-semibold text-danger">No OR</span>
+                        </div>
                     </td>
                     <td><TransactionTypeBadge :type="row.type" /></td>
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
-                    <td class="text-right whitespace-nowrap">
-                        <div class="flex items-center justify-end gap-2">
-                        <div class="flex max-w-[17rem] flex-wrap items-center justify-end gap-1">
-                            <Button v-if="row.can_forward" variant="secondary" size="sm" @click="openForward(row)">Forward to RO</Button>
-                        </div>
-                        <div class="flex shrink-0 items-center">
+                    <td class="min-w-40">
+                        <Button v-if="row.can_forward" variant="primary" size="sm" @click="openForward(row)">Forward to RO</Button>
+                    </td>
+                    <td class="sticky right-0 w-28 bg-surface text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end">
                             <Button v-if="row.can_work" variant="ghost" size="sm" :href="`${base}/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
                                 <Icon name="pencil" size="sm" />
                             </Button>
@@ -213,14 +213,18 @@ const inputClass =
                                 <Icon name="trash" size="sm" />
                             </Button>
                         </div>
-                        </div>
                     </td>
                 </tr>
             </tbody>
         </Table>
 
-        <p class="mt-3 text-sm text-text-muted">{{ transactions.total.toLocaleString('en-PH') }} transactions</p>
-        <Pagination :prev-url="transactions.prev_page_url" :next-url="transactions.next_page_url" :current-page="transactions.current_page" :last-page="transactions.last_page" />
+        <Pagination
+            :summary="footerSummary"
+            :prev-url="transactions.prev_page_url"
+            :next-url="transactions.next_page_url"
+            :current-page="transactions.current_page"
+            :last-page="transactions.last_page"
+        />
 
         <Modal :open="forwarding !== null" title="Forward to the Regional Office" tone="primary" icon="upload" @close="forwarding = null">
             <form v-if="forwarding" id="forward-form" class="space-y-4" @submit.prevent="submitForward">

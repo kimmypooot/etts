@@ -10,6 +10,10 @@ import Pagination from '@/Components/UI/Pagination.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import Icon from '@/Components/UI/Icon.vue';
 import Select from '@/Components/Forms/Select.vue';
+import FilterBar from '@/Components/Forms/FilterBar.vue';
+import FilterField from '@/Components/Forms/FilterField.vue';
+import SearchInput from '@/Components/Forms/SearchInput.vue';
+import DateRange from '@/Components/Forms/DateRange.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
 
 const props = defineProps({
@@ -61,8 +65,6 @@ const viewing = ref(null);
 const formatWhen = (iso) =>
     iso ? new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' }) : '';
 
-const inputClass =
-    'block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-xs focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
 </script>
 
 <template>
@@ -97,30 +99,17 @@ const inputClass =
             </button>
         </div>
 
-        <div class="mb-4 grid gap-3 surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="relative">
-                <label for="search" class="sr-only">Search</label>
-                <Icon name="search" size="sm" class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted" />
-                <input id="search" v-model="filters.search" type="search" placeholder="Search details or user" :class="[inputClass, 'pl-9']" />
-            </div>
-            <div>
-                <label for="action" class="sr-only">Action</label>
+        <FilterBar :active="anyFilter" @clear="clearFilters">
+            <FilterField label="Search" for-id="search" grow>
+                <SearchInput id="search" v-model="filters.search" placeholder="Search details or user" />
+            </FilterField>
+            <FilterField label="Action" for-id="action">
                 <Select id="action" v-model="filters.action" :options="actionOptions" />
-            </div>
-            <div class="flex items-center gap-2 lg:col-span-2">
-                <label for="from" class="sr-only">From</label>
-                <input id="from" v-model="filters.from" type="date" :class="inputClass" />
-                <span class="text-text-muted" aria-hidden="true">–</span>
-                <label for="to" class="sr-only">To</label>
-                <input id="to" v-model="filters.to" type="date" :class="inputClass" />
-            </div>
-            <div v-if="anyFilter" class="sm:col-span-2 lg:col-span-4">
-                <Button variant="ghost" size="sm" @click="clearFilters">
-                    <Icon name="close" size="sm" />
-                    Clear filters
-                </Button>
-            </div>
-        </div>
+            </FilterField>
+            <FilterField label="Date between" for-id="from" wide>
+                <DateRange v-model:from="filters.from" v-model:to="filters.to" />
+            </FilterField>
+        </FilterBar>
 
         <Table :empty="entries.data.length === 0">
             <template #empty>

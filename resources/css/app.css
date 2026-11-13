@@ -1001,15 +1001,9 @@
     animation: chart-sweep 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Missing-OR rows blink softly (ported from the legacy board's .row-missing-or): a red edge stripe stays put while the row tint breathes. Hovering the row stops the blink so it can be read and clicked. */
-@keyframes row-alert-pulse {
-    50% {
-        background-color: var(--color-danger-bg);
-    }
-}
-
+/* Missing-OR rows (from the legacy board's .row-missing-or): a red edge stripe and a light static tint, with a "No OR" tag in the row so the colour is never the only signal. Opaque on purpose, so a sticky actions cell stays solid. Hovering deepens the tint. */
 .row-missing-or > td {
-    animation: row-alert-pulse 1.5s ease-in-out infinite;
+    background-color: color-mix(in srgb, var(--color-danger-bg) 50%, var(--color-surface));
 }
 
 .row-missing-or > td:first-child {
@@ -1017,8 +1011,12 @@
 }
 
 .row-missing-or:hover > td {
-    animation: none;
     background-color: var(--color-danger-bg);
+}
+
+/* A row ticked for a batch action. */
+.row-selected > td {
+    background-color: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
 
 /* Confirms a status change landed on its row, then fades out. */
@@ -1035,11 +1033,6 @@
 @media (prefers-reduced-motion: reduce) {
     .row-just-updated > td {
         animation: none;
-    }
-
-    .row-missing-or > td {
-        animation: none;
-        background-color: var(--color-danger-bg);
     }
 
     .chart-rise,

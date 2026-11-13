@@ -12,6 +12,10 @@ import Icon from '@/Components/UI/Icon.vue';
 import Modal from '@/Components/Feedback/Modal.vue';
 import Alert from '@/Components/Feedback/Alert.vue';
 import Select from '@/Components/Forms/Select.vue';
+import FilterBar from '@/Components/Forms/FilterBar.vue';
+import FilterField from '@/Components/Forms/FilterField.vue';
+import SearchInput from '@/Components/Forms/SearchInput.vue';
+import DateRange from '@/Components/Forms/DateRange.vue';
 import Checkbox from '@/Components/Forms/Checkbox.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
@@ -42,12 +46,16 @@ const filters = reactive({
     search: props.filters.search ?? '',
     type: props.filters.type ?? '',
     status: props.filters.status ?? '',
-    office: props.filters.office ?? '',
+    office: props.filters.office ?? 'all',
     from: props.filters.from ?? '',
     to: props.filters.to ?? '',
 });
 
-const anyFilter = computed(() => Object.values(filters).some((value) => value !== ''));
+// The office filter opens on ESD (the admin's own office); 'all' is chosen explicitly.
+const defaultOffice = props.options.defaultOffice ?? 'all';
+const anyFilter = computed(() =>
+    Object.entries(filters).some(([key, value]) => (key === 'office' ? String(value) !== String(defaultOffice) : value !== '')),
+);
 
 const visit = (extra = {}) => {
     const query = { board: props.filters.board, ...filters, sort: props.filters.sort, dir: props.filters.dir, ...extra };
@@ -67,7 +75,16 @@ watch(
     },
 );
 
-const clearFilters = () => Object.keys(filters).forEach((key) => (filters[key] = ''));
+// Forwarded records are the field offices' (sent, not yet received at ESD), so under the default ESD office they would
+// never show: choosing that chip looks across all offices instead.
+watch(
+    () => filters.status,
+    (status) => {
+        if (status === 'forwarded' && String(filters.office) === String(defaultOffice)) filters.office = 'all';
+    },
+);
+
+const clearFilters = () => Object.keys(filters).forEach((key) => (filters[key] = key === 'office' ? defaultOffice : ''));
 
 const switchBoard = (board) => {
     selected.value = [];
@@ -79,8 +96,30 @@ const sortBy = (column) =>
 const ariaSort = (column) => (props.filters.sort === column ? (props.filters.dir === 'asc' ? 'ascending' : 'descending') : 'none');
 
 const typeOptions = [{ value: '', label: 'All types' }, ...props.options.types];
-const statusOptions = computed(() => [{ value: '', label: 'All statuses' }, ...props.options.statuses]);
-const officeOptions = [{ value: '', label: 'All offices' }, ...props.options.offices];
+const officeOptions = [{ value: 'all', label: 'All offices' }, ...props.options.offices];
+
+// ─── Table layout ─────────────────────────────────────────────────────────
+// With one office chosen every row says the same office, so the column is only for "All offices".
+const showOffice = computed(() => props.filters.office == null);
+const showNextStep = computed(() => can('transactions.process'));
+
+// The footer names the office so the default (ESD) is never a surprise.
+const footerSummary = computed(() => {
+    const page = props.transactions;
+    const office = props.filters.office == null ? 'all offices' : (props.options.offices.find((o) => String(o.value) === String(props.filters.office))?.label ?? 'one office');
+
+    return page.total === 0
+        ? `0 transactions · ${office}`
+        : `Showing ${page.from.toLocaleString('en-PH')}–${page.to.toLocaleString('en-PH')} of ${page.total.toLocaleString('en-PH')} transactions · ${office}`;
+});
+
+// One main action per row stands out; the cautious ones (disapprove, return, cancel) sit beside it as outlines.
+const CAUTIOUS = ['Cancelled', 'Disapproved', 'Returned'];
+const actionVariant = (row, action) => {
+    if (CAUTIOUS.includes(action.status)) return 'outline';
+
+    return row.actions.find((a) => !CAUTIOUS.includes(a.status)) === action ? 'primary' : 'secondary';
+};
 
 // ─── Selection and batch ──────────────────────────────────────────────────
 const selected = ref([]);
@@ -228,7 +267,6 @@ const openQuick = (row) => {
 const submitQuick = () =>
     quickForm.patch(`/admin/transactions/${quick.value.id}/quick`, { preserveScroll: true, onSuccess: () => (quick.value = null) });
 
-
 const inputClass =
     'block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-xs focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
 </script>
@@ -239,7 +277,6 @@ const inputClass =
     <StaffLayout>
         <PageHeader
             title="Transactions"
-            description="Certifications, authentications and Special Eligibility Applications filed at ESD and the field offices."
             :breadcrumbs="[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Transactions' }]"
         >
             <template #actions>
@@ -270,44 +307,112 @@ const inputClass =
             </button>
         </div>
 
-        <StatusChips v-model="filters.status" :counts="statusCounts" />
-
-        <div class="mb-4 grid gap-3 surface-raised p-4 sm:grid-cols-2 lg:grid-cols-7">
-            <div class="relative sm:col-span-2">
-                <label for="search" class="sr-only">Search</label>
-                <Icon name="search" size="sm" class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted" />
-                <input id="search" v-model="filters.search" type="search" placeholder="Name, OR number, ID or eligibility" :class="[inputClass, 'pl-9']" />
-            </div>
-            <div>
-                <label for="type" class="sr-only">Type</label>
+        <FilterBar :active="anyFilter" @clear="clearFilters">
+            <template #chips>
+                <StatusChips v-model="filters.status" :counts="statusCounts" />
+            </template>
+            <FilterField label="Search" for-id="search" grow>
+                <SearchInput id="search" v-model="filters.search" placeholder="Name, OR number, ID or eligibility" />
+            </FilterField>
+            <FilterField label="Type" for-id="type">
                 <Select id="type" v-model="filters.type" :options="typeOptions" />
-            </div>
-            <div>
-                <label for="status" class="sr-only">Status</label>
-                <Select id="status" v-model="filters.status" :options="statusOptions" />
-            </div>
-            <div>
-                <label for="office" class="sr-only">Office</label>
+            </FilterField>
+            <FilterField label="Office" for-id="office">
                 <Select id="office" v-model="filters.office" :options="officeOptions" />
-            </div>
-            <div class="flex min-w-0 items-center gap-2 sm:col-span-2">
-                <label for="from" class="sr-only">From</label>
-                <input id="from" v-model="filters.from" type="date" :class="[inputClass, 'min-w-0']" />
-                <span class="text-text-muted" aria-hidden="true">–</span>
-                <label for="to" class="sr-only">To</label>
-                <input id="to" v-model="filters.to" type="date" :class="[inputClass, 'min-w-0']" />
-            </div>
-            <div v-if="anyFilter" class="sm:col-span-2 lg:col-span-6">
-                <Button variant="ghost" size="sm" @click="clearFilters">
-                    <Icon name="close" size="sm" />
-                    Clear filters
-                </Button>
-            </div>
-        </div>
+            </FilterField>
+            <FilterField label="Filed between" for-id="from" wide>
+                <DateRange v-model:from="filters.from" v-model:to="filters.to" />
+            </FilterField>
+        </FilterBar>
 
+        <Table :empty="transactions.data.length === 0">
+            <template #empty>
+                <EmptyState icon="clipboard" title="No transactions match" description="Try another search or clear the filters." />
+            </template>
+            <thead>
+                <tr>
+                    <th scope="col" class="w-10">
+                        <Checkbox id="select-all" :model-value="allSelected" label="" @update:model-value="toggleAll" />
+                        <span class="sr-only">Select all on this page</span>
+                    </th>
+                    <th scope="col" :aria-sort="ariaSort('name')"><button type="button" class="font-semibold hover:underline" @click="sortBy('name')">Applicant</button></th>
+                    <th scope="col">Type</th>
+                    <th v-if="showOffice" scope="col">Office</th>
+                    <th scope="col" :aria-sort="ariaSort('date')"><button type="button" class="font-semibold hover:underline" @click="sortBy('date')">Filed</button></th>
+                    <th scope="col" :aria-sort="ariaSort('status')"><button type="button" class="font-semibold hover:underline" @click="sortBy('status')">Status</button></th>
+                    <th scope="col"><abbr title="Action officer" class="no-underline">AO</abbr></th>
+                    <th v-if="showNextStep" scope="col">Next step</th>
+                    <th scope="col" class="sticky right-0 w-24 bg-inherit"><span class="sr-only">Edit and history</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr
+                    v-for="row in transactions.data"
+                    :key="row.id"
+                    :class="{ 'row-missing-or': !row.official_receipt, 'row-selected': selected.includes(row.id), 'row-just-updated': isFlashing(row.id) }"
+                >
+                    <td>
+                        <input
+                            v-model="selected"
+                            type="checkbox"
+                            :value="row.id"
+                            :aria-label="`Select transaction ${row.id}`"
+                            class="size-4 accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                        />
+                    </td>
+                    <td class="min-w-48 font-medium">
+                        {{ personName(row.name) }}
+                        <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-normal text-text-muted">
+                            <span class="tabular-nums">#{{ row.id }}</span>
+                            <span v-if="row.eligibility">· {{ row.eligibility }}</span>
+                            <span v-if="!row.official_receipt" class="rounded bg-danger-bg px-1.5 py-0.5 font-semibold text-danger">No OR</span>
+                        </div>
+                    </td>
+                    <td><TransactionTypeBadge :type="row.type" /></td>
+                    <td v-if="showOffice" class="whitespace-nowrap text-sm">{{ row.office }}</td>
+                    <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
+                    <td><TransactionStatusBadge :status="row.status" /></td>
+                    <td class="whitespace-nowrap text-sm">{{ row.action_officer || '—' }}</td>
+                    <td v-if="showNextStep" class="min-w-60">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <Button
+                                v-for="action in row.actions"
+                                :key="action.kind + action.status"
+                                :variant="actionVariant(row, action)"
+                                size="sm"
+                                :title="actionHint(action)"
+                                @click="openAction(row, action)"
+                            >
+                                {{ action.label }}
+                            </Button>
+                        </div>
+                    </td>
+                    <td class="sticky right-0 w-24 bg-surface text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end">
+                            <Button v-if="can('transactions.manage')" variant="ghost" size="sm" :href="`/admin/transactions/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
+                                <Icon name="pencil" size="sm" />
+                            </Button>
+                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
+                                <Icon name="clock" size="sm" />
+                            </Button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </Table>
+
+        <Pagination
+            :summary="footerSummary"
+            :prev-url="transactions.prev_page_url"
+            :next-url="transactions.next_page_url"
+            :current-page="transactions.current_page"
+            :last-page="transactions.last_page"
+        />
+
+        <!-- Batch bar: pinned to the bottom of the screen so selecting a row never moves the table. -->
         <div
             v-if="selected.length"
-            class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-surface p-3 text-sm"
+            class="sticky bottom-4 z-20 mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-surface p-3 text-sm shadow-lg"
             role="region"
             aria-label="Selected transactions"
         >
@@ -323,81 +428,6 @@ const inputClass =
             </Button>
             <Button variant="ghost" size="sm" title="Unselect all transactions" @click="selected = []">Clear selection</Button>
         </div>
-
-        <Table :empty="transactions.data.length === 0">
-            <template #empty>
-                <EmptyState icon="clipboard" title="No transactions match" description="Try another search or clear the filters." />
-            </template>
-            <thead>
-                <tr>
-                    <th scope="col" class="w-10">
-                        <Checkbox id="select-all" :model-value="allSelected" label="" @update:model-value="toggleAll" />
-                        <span class="sr-only">Select all on this page</span>
-                    </th>
-                    <th scope="col">ID</th>
-                    <th scope="col" :aria-sort="ariaSort('name')"><button type="button" class="font-semibold hover:underline" @click="sortBy('name')">Applicant</button></th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Office</th>
-                    <th scope="col" :aria-sort="ariaSort('date')"><button type="button" class="font-semibold hover:underline" @click="sortBy('date')">Filed</button></th>
-                    <th scope="col" :aria-sort="ariaSort('status')"><button type="button" class="font-semibold hover:underline" @click="sortBy('status')">Status</button></th>
-                    <th scope="col"><span class="sr-only">Actions</span></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="row in transactions.data" :key="row.id" :class="{ 'row-missing-or': !row.official_receipt, 'row-just-updated': isFlashing(row.id) }">
-                    <td>
-                        <input
-                            v-model="selected"
-                            type="checkbox"
-                            :value="row.id"
-                            :aria-label="`Select transaction ${row.id}`"
-                            class="size-4 accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                        />
-                    </td>
-                    <td class="whitespace-nowrap text-text-muted">#{{ row.id }}</td>
-                    <td class="min-w-44 font-medium">
-                        {{ personName(row.name) }}
-                        <div v-if="row.eligibility" class="text-xs font-normal text-text-muted">{{ row.eligibility }}</div>
-                    </td>
-                    <td><TransactionTypeBadge :type="row.type" /></td>
-                    <td class="whitespace-nowrap text-sm">{{ row.office }}</td>
-                    <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
-                    <td><TransactionStatusBadge :status="row.status" /></td>
-                    <td class="text-right whitespace-nowrap">
-                        <div class="flex items-center justify-end gap-2">
-                        <div class="flex max-w-[17rem] flex-wrap items-center justify-end gap-1">
-                            <Button
-                                v-for="action in can('transactions.process') ? row.actions : []"
-                                :key="action.kind + action.status"
-                                :variant="action.status === 'Cancelled' || action.status === 'Disapproved' ? 'outline' : 'secondary'"
-                                size="sm"
-                                :title="actionHint(action)"
-                                @click="openAction(row, action)"
-                            >
-                                {{ action.label }}
-                            </Button>
-                        </div>
-                        <div class="flex shrink-0 items-center">
-                            <Button v-if="can('transactions.manage')" variant="ghost" size="sm" :href="`/admin/transactions/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
-                                <Icon name="pencil" size="sm" />
-                            </Button>
-                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
-                                <Icon name="clock" size="sm" />
-                            </Button>
-                        </div>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </Table>
-
-        <p class="mt-3 text-sm text-text-muted">{{ transactions.total.toLocaleString('en-PH') }} transactions</p>
-        <Pagination
-            :prev-url="transactions.prev_page_url"
-            :next-url="transactions.next_page_url"
-            :current-page="transactions.current_page"
-            :last-page="transactions.last_page"
-        />
 
         <!-- Forward / receive / change status -->
         <Modal :open="acting !== null" :title="acting?.action.label ?? ''" tone="primary" icon="check" @close="acting = null">

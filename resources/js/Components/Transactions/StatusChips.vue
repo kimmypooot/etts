@@ -18,8 +18,10 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const total = computed(() => Object.values(props.counts).reduce((sum, n) => sum + n, 0));
-// A status with nothing in it is hidden, unless it is the one selected.
-const chips = computed(() => Object.entries(props.counts).filter(([status, n]) => n > 0 || status === props.modelValue));
+// A status with nothing in it is hidden, unless it is the one selected or one that is always offered (Forwarded: the
+// records field offices have sent and ESD has yet to receive).
+const ALWAYS = ['forwarded'];
+const chips = computed(() => Object.entries(props.counts).filter(([status, n]) => n > 0 || status === props.modelValue || ALWAYS.includes(status)));
 
 const toggle = (status) => emit('update:modelValue', props.modelValue === status ? '' : status);
 
@@ -27,7 +29,7 @@ const base = 'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-
 </script>
 
 <template>
-    <div class="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
+    <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
         <button
             type="button"
             :class="[base, modelValue === '' ? 'border-primary bg-primary text-white' : 'border-border bg-surface text-text hover:bg-surface-muted']"

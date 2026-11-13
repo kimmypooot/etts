@@ -23,6 +23,11 @@ defineProps({
         type: Number,
         required: true,
     },
+    /** When set, one footer row: this summary on the left, the pager on the right (shown even for a single page). */
+    summary: {
+        type: String,
+        default: null,
+    },
 });
 
 const linkClass =
@@ -30,7 +35,17 @@ const linkClass =
 </script>
 
 <template>
-    <nav v-if="lastPage > 1" class="mt-4 flex items-center justify-between gap-3 text-sm" aria-label="Pagination">
+    <div v-if="summary !== null" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <p class="text-text-muted">{{ summary }}</p>
+
+        <nav v-if="lastPage > 1" class="flex items-center gap-3" aria-label="Pagination">
+            <Link v-if="prevUrl" :href="prevUrl" :class="linkClass" preserve-scroll>Previous</Link>
+            <span class="text-text-muted">Page {{ currentPage }} of {{ lastPage }}</span>
+            <Link v-if="nextUrl" :href="nextUrl" :class="linkClass" preserve-scroll>Next</Link>
+        </nav>
+    </div>
+
+    <nav v-else-if="lastPage > 1" class="mt-4 flex items-center justify-between gap-3 text-sm" aria-label="Pagination">
         <Link v-if="prevUrl" :href="prevUrl" :class="linkClass" preserve-scroll>Previous</Link>
         <span v-else />
 

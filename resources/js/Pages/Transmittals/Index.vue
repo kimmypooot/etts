@@ -9,6 +9,10 @@ import Pagination from '@/Components/UI/Pagination.vue';
 import EmptyState from '@/Components/UI/EmptyState.vue';
 import Icon from '@/Components/UI/Icon.vue';
 import Select from '@/Components/Forms/Select.vue';
+import FilterBar from '@/Components/Forms/FilterBar.vue';
+import FilterField from '@/Components/Forms/FilterField.vue';
+import SearchInput from '@/Components/Forms/SearchInput.vue';
+import DateRange from '@/Components/Forms/DateRange.vue';
 import TransmittalStatusBadge from '@/Components/Transmittals/TransmittalStatusBadge.vue';
 
 const props = defineProps({
@@ -64,8 +68,6 @@ const officeOptions = [{ value: '', label: 'All offices' }, ...props.options.off
 const formatWhen = (iso) =>
     iso ? new Date(iso).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' }) : '';
 
-const inputClass =
-    'block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-xs focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
 </script>
 
 <template>
@@ -101,27 +103,17 @@ const inputClass =
             </button>
         </div>
 
-        <div class="mb-4 grid gap-3 surface-raised p-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="relative">
-                <label for="search" class="sr-only">Search</label>
-                <Icon name="search" size="sm" class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-text-muted" />
-                <input id="search" v-model="filters.search" type="search" placeholder="Number or remarks" :class="[inputClass, 'pl-9']" />
-            </div>
-            <div>
-                <label for="status" class="sr-only">Status</label>
+        <FilterBar :active="anyFilter" @clear="clearFilters">
+            <FilterField label="Search" for-id="search" grow>
+                <SearchInput id="search" v-model="filters.search" placeholder="Number or remarks" />
+            </FilterField>
+            <FilterField label="Status" for-id="status">
                 <Select id="status" v-model="filters.status" :options="statusOptions" />
-            </div>
-            <div v-if="portal === 'esd'">
-                <label for="office" class="sr-only">Office</label>
+            </FilterField>
+            <FilterField v-if="portal === 'esd'" label="Office" for-id="office">
                 <Select id="office" v-model="filters.office" :options="officeOptions" />
-            </div>
-            <div v-if="anyFilter">
-                <Button variant="ghost" size="sm" @click="clearFilters">
-                    <Icon name="close" size="sm" />
-                    Clear filters
-                </Button>
-            </div>
-        </div>
+            </FilterField>
+        </FilterBar>
 
         <Table :empty="transmittals.data.length === 0">
             <template #empty>
