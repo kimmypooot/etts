@@ -42,12 +42,14 @@ const confirming = ref(false);
 const moving = ref(false);
 const finishLabel = computed(() => (props.finish === 'complete' ? 'Mark completed' : 'Release'));
 const move = () => {
+    // Read before posting: the props already describe the next state when onSuccess runs.
+    const releasing = props.finish === 'release';
     moving.value = true;
     router.post(`${props.base}/${props.id}/status`, { status: props.finishStatus }, {
         preserveScroll: true,
         onSuccess: () => {
             confirming.value = false;
-            if (props.finish === 'release') router.visit(props.base);
+            if (releasing) router.visit(props.base);
         },
         onFinish: () => (moving.value = false),
     });
