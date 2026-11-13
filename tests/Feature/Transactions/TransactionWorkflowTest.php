@@ -169,6 +169,28 @@ class TransactionWorkflowTest extends TestCase
         $this->assertSame(TransactionStatus::Received, $record->fresh()->transaction_status);
     }
 
+    public function test_marking_received_makes_the_esd_user_the_action_officer(): void
+    {
+        $record = $this->spels(TransactionStatus::Forwarded);
+
+        $this->workflow->receive($record, '2026-05-01', $this->admin);
+
+        $this->assertSame('esd.officer', $record->fresh()->action_officer);
+    }
+
+    public function test_a_field_office_user_never_becomes_the_action_officer(): void
+    {
+        $fo = User::factory()->create(['username' => 'samar.staff', 'office_id' => 2]);
+        $paid = $this->cert(TransactionStatus::Submitted, ['official_receipt' => 'OR-1', 'office_id' => 2]);
+        $unpaid = $this->cert(TransactionStatus::Submitted, ['office_id' => 2]);
+
+        $this->workflow->receive($paid, '2026-05-01', $fo);
+        $this->workflow->changeStatus($unpaid, TransactionStatus::Cancelled, $fo, remarks: 'Applicant withdrew.');
+
+        $this->assertNull($paid->fresh()->action_officer);
+        $this->assertNull($unpaid->fresh()->action_officer);
+    }
+
     public function test_a_certification_can_be_reverted_to_submitted_but_not_forwarded(): void
     {
         $record = $this->cert(TransactionStatus::Received);

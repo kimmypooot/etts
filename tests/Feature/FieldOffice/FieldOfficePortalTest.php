@@ -319,10 +319,43 @@ class FieldOfficePortalTest extends TestCase
         $labels = fn (Transaction $t, User $as) => array_column($workflow->availableActions($t->load('office'), $as), 'label');
 
         $this->assertSame(['Forward to RO'], $labels($this->record(TransactionStatus::Submitted), $this->samar));
+        $this->assertSame(['Cancel transaction'], $labels($this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification]), $this->samar));
+        $this->assertSame([], $labels($this->record(TransactionStatus::Received, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']), $this->samar));
         $this->assertSame(['Forward to RO'], $labels($this->record(TransactionStatus::Returned), $this->samar));
         $this->assertSame([], $labels($this->record(TransactionStatus::Received), $this->samar));
         $this->assertSame([], $labels($this->record(TransactionStatus::Returned), $this->admin));
         $this->assertSame(['Approve', 'Disapprove', 'Return to applicant'], $labels($this->record(TransactionStatus::Received), $this->admin));
+    }
+
+    // ─── Cancelling ───────────────────────────────────────────────────────
+
+    public function test_the_office_can_cancel_its_own_submitted_certification_with_a_reason(): void
+    {
+        $record = $this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification]);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$record->id}/cancel", [])->assertSessionHasErrors('remarks');
+        $this->assertSame(TransactionStatus::Submitted, $record->fresh()->transaction_status);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$record->id}/cancel", ['remarks' => 'Applicant withdrew.'])->assertSessionHas('status');
+
+        $fresh = $record->fresh();
+        $this->assertSame(TransactionStatus::Cancelled, $fresh->transaction_status);
+        $this->assertStringContainsString('Applicant withdrew.', $fresh->remarks);
+        $this->assertNull($fresh->action_officer);
+    }
+
+    public function test_the_office_cannot_cancel_a_received_record_a_spels_application_or_another_offices_record(): void
+    {
+        $received = $this->record(TransactionStatus::Received, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']);
+        $spels = $this->record(TransactionStatus::Submitted);
+        $other = $this->record(TransactionStatus::Submitted, 3, ['transaction_type' => TransactionType::Certification]);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$received->id}/cancel", ['remarks' => 'x'])->assertForbidden();
+        $this->actingAs($this->samar)->post("/fo/transactions/{$spels->id}/cancel", ['remarks' => 'x'])->assertForbidden();
+        $this->actingAs($this->samar)->post("/fo/transactions/{$other->id}/cancel", ['remarks' => 'x'])->assertNotFound();
+
+        $this->assertSame(TransactionStatus::Received, $received->fresh()->transaction_status);
+        $this->assertSame(TransactionStatus::Submitted, $spels->fresh()->transaction_status);
     }
 
     // ─── Deleting ─────────────────────────────────────────────────────────

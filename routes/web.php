@@ -78,6 +78,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/transactions/{transaction}/edit', [Fo\TransactionController::class, 'edit'])->can('workAsOffice', 'transaction')->name('transactions.edit');
         Route::put('/transactions/{transaction}', [Fo\TransactionController::class, 'update'])->can('workAsOffice', 'transaction')->name('transactions.update');
         Route::post('/transactions/{transaction}/forward', [Fo\TransactionController::class, 'forward'])->can('workAsOffice', 'transaction')->name('transactions.forward');
+        Route::post('/transactions/{transaction}/cancel', [Fo\TransactionController::class, 'cancel'])->can('cancelAsOffice', 'transaction')->name('transactions.cancel');
         Route::get('/transactions/{transaction}/attachments/{slot}', [Fo\TransactionController::class, 'attachment'])->whereNumber('slot')->can('view', 'transaction')->name('attachments.show');
         Route::get('/deleted', Fo\DeletedController::class)->can('office', Transaction::class)->name('deleted');
 

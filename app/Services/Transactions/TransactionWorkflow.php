@@ -89,7 +89,7 @@ final class TransactionWorkflow
     {
         return $this->locked($transaction, function (Transaction $locked) use ($date, $actor) {
             $this->assertCanReceive($locked);
-            $this->apply($locked, TransactionStatus::Received, ['date_received_ro' => $date], $actor, "Received by the action officer on {$date}.");
+            $this->apply($locked, TransactionStatus::Received, ['date_received_ro' => $date, ...$this->officer($actor)], $actor, "Received by the action officer on {$date}.");
 
             return $locked;
         });
@@ -110,7 +110,7 @@ final class TransactionWorkflow
             }
 
             $date ??= today()->toDateString();
-            $attributes = ['date_completed' => $date, 'action_officer' => $actor->username];
+            $attributes = ['date_completed' => $date, ...$this->officer($actor)];
 
             if ($remarks !== '') {
                 $entry = "[{$date} {$to->value}]: {$remarks}";
@@ -165,7 +165,7 @@ final class TransactionWorkflow
             $column = $to === TransactionStatus::Received ? 'date_received_ro' : 'date_completed';
 
             foreach ($records as $record) {
-                $this->apply($record, $to, [$column => $today, 'action_officer' => $actor->username], $actor,
+                $this->apply($record, $to, [$column => $today, ...$this->officer($actor)], $actor,
                     "Batch: status set to {$to->value} (1 of {$records->count()} in this batch).", ['batch' => $records->count()]);
             }
 
@@ -221,6 +221,11 @@ final class TransactionWorkflow
 
         if ($actor !== null && ! $actor->isAdmin()) {
             // Receiving and moving a record along is the Regional Office's work.
+            // The office may withdraw a certification or authentication while it is still submitted.
+            if ($status === TransactionStatus::Submitted && $type->isIssuance()) {
+                $actions[] = ['kind' => 'status', 'status' => TransactionStatus::Cancelled->value, 'label' => 'Cancel transaction', 'needs_remarks' => true];
+            }
+
             return $actions;
         }
 
@@ -337,6 +342,18 @@ final class TransactionWorkflow
     }
 
     // ─── Plumbing ─────────────────────────────────────────────────────────
+
+    /**
+     * The action officer is the ESD staff member who works the record. A field
+     * office user (forwarding, or recording a payment that auto-receives) or
+     * cancelling their own filing never becomes it.
+     *
+     * @return array{action_officer?: string}
+     */
+    private function officer(User $actor): array
+    {
+        return $actor->isAdmin() ? ['action_officer' => $actor->username] : [];
+    }
 
     /**
      * Runs `$work` on a freshly locked copy of the record.

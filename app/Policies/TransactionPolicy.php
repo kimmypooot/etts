@@ -24,7 +24,7 @@ class TransactionPolicy
         return $user->isAdmin() || ($user->office_id !== null && $user->office_id === $transaction->office_id);
     }
 
-    /** Forward, receive, change status, batch and revert. */
+    /** Forward, receive, change status, batch and revert (ESD). */
     public function process(User $user, ?Transaction $transaction = null): bool
     {
         return $user->isAdmin();
@@ -59,6 +59,20 @@ class TransactionPolicy
         return $this->office($user)
             && $transaction->office_id === $user->office_id
             && self::stillWithOffice($transaction);
+    }
+
+    /**
+     * Cancel an own-office certification or authentication. Narrower than
+     * workAsOffice: only while it is still submitted (unpaid). Once received,
+     * cancelling is ESD's call. SPELS has no Cancelled status; the office
+     * deletes those instead.
+     */
+    public function cancelAsOffice(User $user, Transaction $transaction): bool
+    {
+        return $this->office($user)
+            && $transaction->office_id === $user->office_id
+            && $transaction->transaction_type->isIssuance()
+            && $transaction->transaction_status === TransactionStatus::Submitted;
     }
 
     public static function stillWithOffice(Transaction $transaction): bool

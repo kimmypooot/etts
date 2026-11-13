@@ -69,6 +69,7 @@ class TransactionController extends Controller
                 'remarks' => $transaction->remarks,
                 'can_work' => $user->can('workAsOffice', $transaction),
                 'can_forward' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels(),
+                'can_cancel' => $user->can('cancelAsOffice', $transaction),
             ]);
 
         return Inertia::render('Fo/Transactions/Index', [
@@ -154,6 +155,23 @@ class TransactionController extends Controller
         }
 
         return back()->with('status', 'Forwarded to the Regional Office.');
+    }
+
+    /**
+     * Withdraws one of the office's own filings while it is still submitted.
+     * The policy limits this to Submitted; the workflow requires the reason.
+     */
+    public function cancel(Request $request, Transaction $transaction): RedirectResponse
+    {
+        $data = $request->validate(['remarks' => ['required', 'string', 'max:1000']]);
+
+        try {
+            $this->workflow->changeStatus($transaction, TransactionStatus::Cancelled, $request->user(), null, $data['remarks']);
+        } catch (WorkflowException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('status', "Transaction #{$transaction->id} cancelled.");
     }
 
     /**

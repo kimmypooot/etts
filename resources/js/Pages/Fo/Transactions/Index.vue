@@ -99,6 +99,25 @@ const submitForward = () =>
         },
     });
 
+// ─── Cancel a submitted certification or authentication ───────────────────
+const cancelling = ref(null);
+const cancelForm = useForm({ remarks: '' });
+
+const openCancel = (row) => {
+    cancelling.value = row;
+    cancelForm.reset();
+    cancelForm.clearErrors();
+};
+
+const submitCancel = () =>
+    cancelForm.post(`${base}/${cancelling.value.id}/cancel`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            flash(cancelling.value.id);
+            cancelling.value = null;
+        },
+    });
+
 // ─── History and delete ───────────────────────────────────────────────────
 const viewing = ref(null);
 const deleting = ref(null);
@@ -200,6 +219,7 @@ const inputClass =
                     <td><TransactionStatusBadge :status="row.status" /></td>
                     <td class="min-w-40">
                         <Button v-if="row.can_forward" variant="primary" size="sm" @click="openForward(row)">Forward to RO</Button>
+                        <Button v-if="row.can_cancel" variant="outline" size="sm" @click="openCancel(row)">Cancel transaction</Button>
                     </td>
                     <td class="sticky right-0 w-28 bg-surface text-right whitespace-nowrap">
                         <div class="flex items-center justify-end">
@@ -236,6 +256,20 @@ const inputClass =
             <template #footer>
                 <Button variant="secondary" @click="forwarding = null">Cancel</Button>
                 <Button type="submit" form="forward-form" :loading="forwardForm.processing">Forward</Button>
+            </template>
+        </Modal>
+
+        <Modal :open="cancelling !== null" :title="cancelling ? `Cancel #${cancelling.id}` : ''" tone="danger" icon="close" @close="cancelling = null">
+            <form v-if="cancelling" id="cancel-form" class="space-y-4" @submit.prevent="submitCancel">
+                <p class="text-sm text-text-muted">{{ personName(cancelling.name) }} · {{ cancelling.type }}</p>
+                <Alert tone="warning">The record stays on file as Cancelled. Only a submitted request (not yet paid) can be cancelled by your office.</Alert>
+                <FormGroup id="cancel-remarks" label="Reason" required :error="cancelForm.errors.remarks">
+                    <textarea id="cancel-remarks" v-model="cancelForm.remarks" rows="3" maxlength="1000" required :class="inputClass" />
+                </FormGroup>
+            </form>
+            <template #footer>
+                <Button variant="secondary" @click="cancelling = null">Keep it</Button>
+                <Button type="submit" form="cancel-form" variant="danger" :loading="cancelForm.processing">Cancel transaction</Button>
             </template>
         </Modal>
 
