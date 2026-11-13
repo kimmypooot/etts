@@ -3,6 +3,7 @@
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\AttachmentController;
+use App\Http\Controllers\Auth\DevSignInController;
 use App\Http\Controllers\Auth\ImisSsoController;
 use App\Http\Controllers\Auth\ImisSsoLogoutController;
 use App\Http\Controllers\Auth\SessionController;
@@ -41,6 +42,11 @@ Route::redirect('/', '/dashboard')->name('home');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [SessionController::class, 'create'])->name('login');
 });
+
+// Local development only (APP_ENV=local and ETTS_DEV_SIGN_IN=true): never registered elsewhere.
+if (DevSignInController::enabled()) {
+    Route::post('/dev/sign-in', [DevSignInController::class, 'store'])->name('dev.sign-in');
+}
 
 // Not under `guest`: a token from IMIS is a new sign-in that replaces any
 // session the browser still holds (see ImisSsoController).

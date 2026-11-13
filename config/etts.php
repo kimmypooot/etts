@@ -63,6 +63,12 @@ return [
     ],
 
     /*
+    | Local development only: a "sign in as" form on the login page that skips
+    | IMIS. It also requires APP_ENV=local, so it can never run in production.
+    */
+    'dev_sign_in' => (bool) env('ETTS_DEV_SIGN_IN', false),
+
+    /*
     | "Sync from legacy" (Settings, and `php artisan etts:sync-legacy`): pulls
     | the legacy database's latest changes in while the old app is still the one
     | in use, without overwriting edits made here. It is OFF unless this is true

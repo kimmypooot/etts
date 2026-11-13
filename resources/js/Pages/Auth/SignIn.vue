@@ -1,5 +1,5 @@
 <script setup>
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import Alert from '@/Components/Feedback/Alert.vue';
 import Button from '@/Components/UI/Button.vue';
 
@@ -7,7 +7,11 @@ import Button from '@/Components/UI/Button.vue';
 // sign-outs land here with the reason.
 defineProps({
     imisUrl: { type: String, default: null },
+    // Only sent in local development (ETTS_DEV_SIGN_IN): { offices: [{ id, name }] }.
+    devSignIn: { type: Object, default: null },
 });
+
+const dev = useForm({ role: 'admin', office_id: '' });
 
 const page = usePage();
 const logo = '/images/csc-logo.png';
@@ -36,6 +40,25 @@ const logo = '/images/csc-logo.png';
                 </p>
 
                 <Button v-if="imisUrl" :href="imisUrl" external class="mt-6 w-full justify-center">Go to IMIS</Button>
+
+                <form
+                    v-if="devSignIn"
+                    class="mt-8 space-y-3 border-t border-border pt-6"
+                    @submit.prevent="dev.post('/dev/sign-in')"
+                >
+                    <p class="text-sm font-semibold text-text">Local development only</p>
+                    <p class="text-xs text-text-muted">Skips IMIS. Not available in production.</p>
+                    <select v-model="dev.role" class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                        <option value="admin">Administrator</option>
+                        <option value="field_office">Field Office</option>
+                    </select>
+                    <select v-model="dev.office_id" class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                        <option value="">{{ dev.role === 'admin' ? 'No office' : 'Choose an office' }}</option>
+                        <option v-for="office in devSignIn.offices" :key="office.id" :value="office.id">{{ office.name }}</option>
+                    </select>
+                    <p v-if="dev.errors.office_id" class="text-xs text-danger">{{ dev.errors.office_id }}</p>
+                    <Button type="submit" :disabled="dev.processing" class="w-full justify-center">Sign in as dev user</Button>
+                </form>
             </div>
         </main>
     </div>
