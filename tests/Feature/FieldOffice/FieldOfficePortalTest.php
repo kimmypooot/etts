@@ -212,16 +212,25 @@ class FieldOfficePortalTest extends TestCase
         $this->assertSame(TransactionStatus::Submitted, $record->transaction_status);
     }
 
-    public function test_filing_a_certification_receives_it_at_once(): void
+    public function test_a_certification_filed_unpaid_starts_submitted_and_the_or_number_receives_it(): void
     {
-        $this->actingAs($this->samar)->post('/fo/transactions', [
+        $input = [
             'transaction_type' => 'Certification', 'office_id' => 2, 'lname' => 'Lim', 'fname' => 'Ben',
             'transaction_date' => '2026-05-04', 'coe_copies' => 1, 'auth_copies' => 0,
-        ])->assertSessionHasNoErrors();
+        ];
+
+        $this->actingAs($this->samar)->post('/fo/transactions', $input)->assertSessionHasNoErrors();
 
         $record = Transaction::sole();
-        $this->assertSame(TransactionStatus::Received, $record->transaction_status);
+        $this->assertSame(TransactionStatus::Submitted, $record->transaction_status);
         $this->assertSame(100, $record->amount);
+
+        // The office still holds an unpaid record, so it may enter the OR number.
+        $this->actingAs($this->samar)->put("/fo/transactions/{$record->id}", [
+            ...$input, 'official_receipt' => 'OR-55', 'version' => $record->fresh()->updated_at->format('Y-m-d H:i:s'),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(TransactionStatus::Received, $record->fresh()->transaction_status);
     }
 
     public function test_the_duplicate_rule_applies_to_the_office_too(): void

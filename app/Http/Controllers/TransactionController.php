@@ -26,7 +26,7 @@ class TransactionController extends Controller
 
     public function index(Request $request, TransactionWorkflow $workflow): Response
     {
-        $filters = BoardFilters::fromRequest($request);
+        $filters = BoardFilters::fromRequest($request, defaultToEsd: true);
 
         $transactions = BoardFilters::sorted(BoardFilters::query($filters)->with('office:id,name,code'), $filters)
             ->paginate(self::PER_PAGE)
@@ -58,6 +58,7 @@ class TransactionController extends Controller
                 'history' => Transaction::whereIn('transaction_status', BoardFilters::statuses('history'))->count(),
             ],
             'options' => [
+                'defaultOffice' => BoardFilters::esdOfficeId(),
                 'types' => array_map(fn (TransactionType $type) => ['value' => $type->value, 'label' => $type->value], TransactionType::cases()),
                 'statuses' => array_map(fn (string $status) => ['value' => $status, 'label' => $status], BoardFilters::statuses($filters['board'])),
                 'offices' => Office::orderBy('name')->get(['id', 'code'])->map(fn (Office $office) => ['value' => $office->id, 'label' => $office->code])->all(),

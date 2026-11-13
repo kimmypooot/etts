@@ -20,7 +20,7 @@ class TransactionExportController extends Controller
 
     public function __invoke(Request $request): StreamedResponse
     {
-        $filters = BoardFilters::fromRequest($request);
+        $filters = BoardFilters::fromRequest($request, defaultToEsd: true);
         $query = BoardFilters::sorted(BoardFilters::query($filters)->with('office:id,code'), $filters);
 
         AuditLog::record('transactions.exported', null, after: ['summary' => "Exported the {$filters['board']} board to CSV.", 'filters' => $filters]);

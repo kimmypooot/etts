@@ -4,6 +4,7 @@ namespace App\Services\Transactions;
 
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
+use App\Models\Office;
 use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -18,19 +19,43 @@ final class BoardFilters
     /**
      * @return array{board: string, search: string, type: ?string, status: ?string, office: ?int, from: ?string, to: ?string, sort: string, dir: string}
      */
-    public static function fromRequest(Request $request): array
+    public static function fromRequest(Request $request, bool $defaultToEsd = false): array
     {
         return [
             'board' => $request->query('board') === 'history' ? 'history' : 'active',
             'search' => trim((string) $request->query('search', '')),
             'type' => TransactionType::tryFrom((string) $request->query('type'))?->value,
             'status' => TransactionStatus::tryFrom((string) $request->query('status'))?->value,
-            'office' => $request->integer('office') ?: null,
+            'office' => self::office($request, $defaultToEsd),
             'from' => self::date($request->query('from')),
             'to' => self::date($request->query('to')),
             'sort' => in_array($request->query('sort'), ['date', 'name', 'status'], true) ? $request->query('sort') : 'date',
             'dir' => $request->query('dir') === 'asc' ? 'asc' : 'desc',
         ];
+    }
+
+    /**
+     * The office filter. `office=all` means every office; a missing `office`
+     * means ESD when the screen asks for that default (the admin board, whose
+     * users are ESD staff), otherwise every office.
+     */
+    private static function office(Request $request, bool $defaultToEsd): ?int
+    {
+        if ($request->query('office') === 'all') {
+            return null;
+        }
+
+        if ($request->has('office') || ! $defaultToEsd) {
+            return $request->integer('office') ?: null;
+        }
+
+        return self::esdOfficeId();
+    }
+
+    /** The Examination Services Division office id, or null when it is not in the offices table. */
+    public static function esdOfficeId(): ?int
+    {
+        return Office::query()->whereRaw('upper(trim(code)) = ?', ['ESD'])->value('id');
     }
 
     /**

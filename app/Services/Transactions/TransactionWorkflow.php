@@ -18,10 +18,12 @@ use Illuminate\Support\Str;
  * Status flow:
  *  - SPELS:  submitted -> forwarded -> received -> Approved | Disapproved | Returned,
  *            then Approved -> Approved/Released.
- *  - Certification, Authentication, both: received -> Completed -> Released;
- *            Cancelled from any status that is not yet finalised.
- *  - A field-office filing is forwarded and then received. A filing made at ESD
- *    itself has no forwarding leg, so it may be received straight from submitted.
+ *  - Certification, Authentication, both: submitted -> received -> Completed
+ *            -> Released, wherever it was filed. It is received once paid, that
+ *            is once it carries an OR number (the recorder does this when the
+ *            number is saved). Cancelled only from submitted or received.
+ *  - A SPELS field-office filing is forwarded and then received. A SPELS filing
+ *    made at ESD itself has no forwarding leg, so it is received straight from submitted.
  *
  * Every change runs in a transaction on a locked row and writes one audit entry
  * per record. Approving a SPELS record passes the one-approval-per-eligibility
@@ -68,6 +70,10 @@ final class TransactionWorkflow
 
             if ($locked->transaction_type->isIssuance()) {
                 throw new WorkflowException('Certifications and authentications are received at ESD directly and are not forwarded.');
+            }
+
+            if ($locked->office?->isEsd()) {
+                throw new WorkflowException('An application filed at ESD is already at the Regional Office and is not forwarded; mark it received instead.');
             }
 
             $this->apply($locked, TransactionStatus::Forwarded, ['date_sent_to_ro' => $date], $actor, "Forwarded to the Regional Office on {$date}.");
@@ -174,9 +180,8 @@ final class TransactionWorkflow
     public function revert(Transaction $transaction, TransactionStatus $to, User $actor): Transaction
     {
         return $this->locked($transaction, function (Transaction $locked) use ($to, $actor) {
-            // Certifications and authentications are received at ESD directly, so
-            // they never were submitted or forwarded and cannot go back to those.
-            $neverHad = $locked->transaction_type->isIssuance() && in_array($to, [TransactionStatus::Submitted, TransactionStatus::Forwarded], true);
+            // Certifications and authentications are never forwarded, so they cannot go back to it.
+            $neverHad = $locked->transaction_type->isIssuance() && $to === TransactionStatus::Forwarded;
 
             if ($neverHad || ! in_array($to, self::REVERT_TARGETS, true) || ! in_array($to, TransactionStatus::allowedFor($locked->transaction_type), true)) {
                 throw new WorkflowException("A {$locked->transaction_type->value} cannot be reverted to {$to->value}.");
@@ -209,7 +214,8 @@ final class TransactionWorkflow
         $forwardable = $status === TransactionStatus::Submitted
             || ($status === TransactionStatus::Returned && $actor !== null && ! $actor->isAdmin());
 
-        if ($forwardable && $type->isSpels()) {
+        // ESD is the Regional Office: what it files itself is received, not forwarded.
+        if ($forwardable && $type->isSpels() && ! ($transaction->office?->isEsd() ?? false)) {
             $actions[] = ['kind' => 'forward', 'status' => null, 'label' => 'Forward to RO', 'needs_remarks' => false];
         }
 
@@ -252,6 +258,11 @@ final class TransactionWorkflow
     {
         $status = $transaction->transaction_status;
 
+        // A certification or authentication is received once it is paid, wherever it was filed.
+        if ($transaction->transaction_type->isIssuance()) {
+            return $status === TransactionStatus::Submitted && filled($transaction->official_receipt);
+        }
+
         return $status === TransactionStatus::Forwarded
             || ($status === TransactionStatus::Submitted && ($transaction->office?->isEsd() ?? false));
     }
@@ -259,7 +270,9 @@ final class TransactionWorkflow
     private function assertCanReceive(Transaction $transaction): void
     {
         if (! $this->canReceive($transaction)) {
-            throw new WorkflowException("Only a forwarded transaction can be received; this one is {$transaction->transaction_status->value}.");
+            throw new WorkflowException($transaction->transaction_type->isIssuance()
+                ? 'Only a submitted certification or authentication with an OR number can be received; enter the OR number once it is paid.'
+                : "Only a forwarded transaction can be received; this one is {$transaction->transaction_status->value}.");
         }
     }
 
@@ -284,9 +297,9 @@ final class TransactionWorkflow
         }
 
         return match ($to) {
-            TransactionStatus::Completed => $from === TransactionStatus::Received ? null : "Invalid flow: the transaction must be received before it can be marked completed.",
+            TransactionStatus::Completed => $from === TransactionStatus::Received ? null : 'Invalid flow: the transaction must be received before it can be marked completed.',
             TransactionStatus::Released => $from === TransactionStatus::Completed ? null : 'Invalid flow: the transaction must be completed before it can be released.',
-            TransactionStatus::Cancelled => in_array($from, TransactionStatus::certsTerminal(), true) ? 'Invalid flow: the transaction is already finalised and cannot be cancelled.' : null,
+            TransactionStatus::Cancelled => in_array($from, [TransactionStatus::Submitted, TransactionStatus::Received], true) ? null : 'Invalid flow: only a submitted or received transaction can be cancelled.',
             TransactionStatus::Approved, TransactionStatus::Disapproved, TransactionStatus::Returned => $from === TransactionStatus::Received ? null : 'Invalid flow: the transaction must be received before this action.',
             TransactionStatus::ApprovedReleased => $from === TransactionStatus::Approved ? null : 'Invalid flow: the transaction must be approved before it can be released.',
             default => 'That status change is not allowed.',

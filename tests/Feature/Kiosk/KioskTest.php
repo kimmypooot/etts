@@ -328,7 +328,7 @@ class KioskTest extends TestCase
         $this->assertNull($record->remarks);
     }
 
-    public function test_a_certification_is_received_at_once_with_its_issuance_details_and_attachments(): void
+    public function test_a_certification_starts_submitted_with_its_issuance_details_and_attachments(): void
     {
         [, $token] = $this->pairedTerminal(1);
 
@@ -339,8 +339,8 @@ class KioskTest extends TestCase
         ]))->assertRedirect('/kiosk/done');
 
         $record = Transaction::sole();
-        $this->assertSame(TransactionStatus::Received, $record->transaction_status);
-        $this->assertSame(today()->toDateString(), $record->date_received_ro->toDateString());
+        $this->assertSame(TransactionStatus::Submitted, $record->transaction_status, 'Not paid yet: it waits for the OR number.');
+        $this->assertNull($record->date_received_ro);
         $this->assertTrue($record->transaction_date->isToday());
         $this->assertNotSame('00:00:00', $record->transaction_date->format('H:i:s'), 'The time of the request is kept.');
 
@@ -401,6 +401,7 @@ class KioskTest extends TestCase
         $this->assertStringContainsString('<form novalidate autocomplete="off"', $source);
         $this->assertDoesNotMatchRegularExpression('/autocomplete="(?!off")[a-z-]+"/', $source, 'A shared terminal must not offer earlier visitors\' details.');
     }
+
     public function test_a_failed_submission_leaves_no_orphaned_upload(): void
     {
         [, $token] = $this->pairedTerminal();

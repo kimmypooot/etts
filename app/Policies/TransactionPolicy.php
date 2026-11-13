@@ -51,8 +51,8 @@ class TransactionPolicy
     /**
      * Edit, delete or forward an own-office record. Allowed while it is still
      * with the office: a SPELS application that is submitted or returned, or a
-     * certification or authentication that has been received but not yet
-     * completed.
+     * certification or authentication that is submitted (awaiting its OR
+     * number) or received but not yet completed.
      */
     public function workAsOffice(User $user, Transaction $transaction): bool
     {
@@ -65,7 +65,7 @@ class TransactionPolicy
     {
         return $transaction->transaction_type->isSpels()
             ? in_array($transaction->transaction_status, [TransactionStatus::Submitted, TransactionStatus::Returned], true)
-            : $transaction->transaction_status === TransactionStatus::Received;
+            : in_array($transaction->transaction_status, [TransactionStatus::Submitted, TransactionStatus::Received], true);
     }
 
     // ─── ESD ──────────────────────────────────────────────────────────────

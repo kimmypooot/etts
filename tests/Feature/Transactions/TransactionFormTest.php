@@ -108,16 +108,62 @@ class TransactionFormTest extends TestCase
         $this->assertSame(1, AuditLog::where('action', 'transaction.created')->count());
     }
 
-    public function test_a_new_certification_is_received_at_once_and_priced_from_its_copies(): void
+    public function test_a_new_unpaid_certification_starts_submitted_and_is_priced_from_its_copies(): void
     {
         $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput())->assertSessionHasNoErrors();
 
         $record = Transaction::sole();
-        $this->assertSame(TransactionStatus::Received, $record->transaction_status);
+        $this->assertSame(TransactionStatus::Submitted, $record->transaction_status);
         $this->assertSame(200, $record->amount); // 1 x 100 + 2 x 50
         $this->assertSame('COE-1, AUTH-2', $record->transaction_details);
-        $this->assertSame('2026-05-04', $record->date_received_ro->toDateString());
+        $this->assertNull($record->date_received_ro);
         $this->assertSame('Employment', $record->issuanceRequest->purpose_of_request);
+    }
+
+    public function test_a_new_certification_filed_with_its_or_number_is_received_at_once(): void
+    {
+        $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput(['official_receipt' => 'OR-100']))->assertSessionHasNoErrors();
+
+        $record = Transaction::sole();
+        $this->assertSame(TransactionStatus::Received, $record->transaction_status);
+        $this->assertSame('2026-05-04', $record->date_received_ro->toDateString());
+    }
+
+    public function test_saving_the_or_number_on_a_submitted_certification_receives_it(): void
+    {
+        $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput());
+        $record = Transaction::sole();
+
+        $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", $this->certInput([
+            'official_receipt' => 'OR-200', 'or_date' => '2026-05-06', 'version' => $record->fresh()->updated_at->format('Y-m-d H:i:s'),
+        ]))->assertSessionHasNoErrors();
+
+        $fresh = $record->fresh();
+        $this->assertSame(TransactionStatus::Received, $fresh->transaction_status);
+        $this->assertSame('2026-05-06', $fresh->date_received_ro->toDateString());
+        $this->assertSame(1, AuditLog::where('action', 'transaction.status_changed')->where('subject_id', $record->id)->count());
+    }
+
+    public function test_quick_editing_the_or_number_on_a_submitted_certification_receives_it(): void
+    {
+        $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput());
+        $record = Transaction::sole();
+
+        $this->actingAs($this->admin)->patch("/admin/transactions/{$record->id}/quick", ['official_receipt' => 'OR-300'])->assertSessionHasNoErrors();
+
+        $fresh = $record->fresh();
+        $this->assertSame(TransactionStatus::Received, $fresh->transaction_status);
+        $this->assertSame(today()->toDateString(), $fresh->date_received_ro->toDateString());
+    }
+
+    public function test_saving_a_certification_without_an_or_number_keeps_it_submitted(): void
+    {
+        $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput());
+        $record = Transaction::sole();
+
+        $this->actingAs($this->admin)->patch("/admin/transactions/{$record->id}/quick", ['remarks' => 'Waiting for payment'])->assertSessionHasNoErrors();
+
+        $this->assertSame(TransactionStatus::Submitted, $record->fresh()->transaction_status);
     }
 
     public function test_the_purpose_others_is_stored_with_its_text(): void

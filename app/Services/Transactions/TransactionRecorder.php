@@ -9,6 +9,7 @@ use App\Models\IssuanceRequest;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Spels\DuplicateCheck;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -18,8 +19,10 @@ use Illuminate\Support\Facades\DB;
  * one case below; moving a record along its flow is {@see TransactionWorkflow}.
  *
  *  - A new SPELS application starts `submitted` (it still has to be received).
- *    A new certification or authentication is received at ESD straight away,
- *    so it starts `received` with both dates set to the filing date.
+ *  - A certification or authentication, wherever filed (kiosk, field office,
+ *    ESD), starts `submitted` until it is paid. The OR number is the proof of
+ *    payment: filed with one it starts `received`, and saving one later on a
+ *    submitted record (full edit or quick edit) receives it.
  *  - A SPELS application cannot be saved when the same applicant already holds
  *    an approved record for the same eligibility.
  *  - A certification or authentication is priced from its copies:
@@ -65,47 +68,48 @@ final class TransactionRecorder
 
         try {
             return DB::transaction(function () use ($type, $fields, $actor, $attachment1, $attachment2, &$stored) {
-            if ($type->isSpels()) {
-                $this->assertNoDuplicate($fields, null);
-            }
+                if ($type->isSpels()) {
+                    $this->assertNoDuplicate($fields, null);
+                }
 
-            $attributes = Arr::only($fields, self::TRANSACTION_FIELDS) + [
-                'transaction_type' => $type,
-                'transaction_date' => $fields['transaction_date'],
-            ];
-
-            if ($type->isIssuance()) {
-                [$attributes['amount'], $attributes['transaction_details']] = $this->priced($fields) ?? [$attributes['amount'] ?? null, $attributes['transaction_details'] ?? null];
-                // The filing date may carry the time (the kiosk records when); the two
-                // date columns take the day only.
-                $day = substr($fields['transaction_date'], 0, 10);
-                $attributes += [
-                    'transaction_status' => TransactionStatus::Received,
-                    'date_sent_to_ro' => $day,
-                    'date_received_ro' => $day,
+                $attributes = Arr::only($fields, self::TRANSACTION_FIELDS) + [
+                    'transaction_type' => $type,
+                    'transaction_date' => $fields['transaction_date'],
                 ];
-            } else {
-                $attributes += ['transaction_status' => TransactionStatus::Submitted];
-            }
 
-            $transaction = Transaction::create($attributes);
+                if ($type->isIssuance()) {
+                    [$attributes['amount'], $attributes['transaction_details']] = $this->priced($fields) ?? [$attributes['amount'] ?? null, $attributes['transaction_details'] ?? null];
+                    // The filing date may carry the time (the kiosk records when); the two
+                    // date columns take the day only.
+                    $day = substr($fields['transaction_date'], 0, 10);
+                    $paid = filled($fields['official_receipt'] ?? null);
+                    $attributes += [
+                        'transaction_status' => $paid ? TransactionStatus::Received : TransactionStatus::Submitted,
+                        'date_sent_to_ro' => $day,
+                        'date_received_ro' => $paid ? ($fields['or_date'] ?? $day) : null,
+                    ];
+                } else {
+                    $attributes += ['transaction_status' => TransactionStatus::Submitted];
+                }
 
-            if ($type->isIssuance()) {
-                IssuanceRequest::create([
-                    ...Arr::only($fields, self::ISSUANCE_FIELDS),
-                    'transaction_id' => $transaction->id,
-                    'sex' => $fields['sex'] ?? null,
-                    'attachment_1' => ($stored[] = $this->attachments->store($attachment1)),
-                    'attachment_2' => ($stored[] = $this->attachments->store($attachment2)),
-                ]);
-            }
+                $transaction = Transaction::create($attributes);
 
-            AuditLog::record('transaction.created', $transaction,
-                after: ['summary' => "Created a {$type->value} transaction for {$this->name($transaction)}.", 'status' => $transaction->transaction_status->value],
-                user: $actor,
-            );
+                if ($type->isIssuance()) {
+                    IssuanceRequest::create([
+                        ...Arr::only($fields, self::ISSUANCE_FIELDS),
+                        'transaction_id' => $transaction->id,
+                        'sex' => $fields['sex'] ?? null,
+                        'attachment_1' => ($stored[] = $this->attachments->store($attachment1)),
+                        'attachment_2' => ($stored[] = $this->attachments->store($attachment2)),
+                    ]);
+                }
 
-            return $transaction;
+                AuditLog::record('transaction.created', $transaction,
+                    after: ['summary' => "Created a {$type->value} transaction for {$this->name($transaction)}.", 'status' => $transaction->transaction_status->value],
+                    user: $actor,
+                );
+
+                return $transaction;
             });
         } catch (\Throwable $e) {
             // The record was rolled back: do not leave its uploads behind with nothing pointing at them.
@@ -175,6 +179,7 @@ final class TransactionRecorder
             }
 
             $this->confirmWalkIn($locked, $fields, $actor, $changed);
+            $this->receiveOnPayment($locked, $actor, $changed);
 
             AuditLog::record('transaction.updated', $locked,
                 after: ['summary' => 'Edited the transaction details'.($changed ? ' ('.implode(', ', array_unique($changed)).')' : ' (no changes)').'.', 'changed' => array_values(array_unique($changed))],
@@ -216,13 +221,14 @@ final class TransactionRecorder
             $attributes = Arr::only($fields, ['official_receipt', 'transaction_details', 'remarks', 'date_sent_to_ro', 'date_received_ro', 'date_completed']);
             $changed = $this->dirtyKeys($locked, $attributes);
             $locked->forceFill($attributes)->save();
+            $this->receiveOnPayment($locked, $actor, $changed);
 
             AuditLog::record('transaction.quick_edited', $locked,
                 after: ['summary' => 'Quick-edited '.($changed ? implode(', ', $changed) : 'nothing').'.', 'changed' => $changed],
                 user: $actor,
             );
 
-            return $locked;
+            return $locked->fresh();
         });
     }
 
@@ -261,6 +267,25 @@ final class TransactionRecorder
         $transaction->forceFill(['date_sent_to_ro' => $date])->save();
         $this->workflow->receive($transaction, $date, $actor);
         $changed[] = 'status (walk-in confirmed)';
+    }
+
+    /**
+     * Saving the OR number of a submitted certification or authentication
+     * records the payment, so the record is received (on the OR date when
+     * given, otherwise today).
+     *
+     * @param  list<string>  $changed
+     */
+    private function receiveOnPayment(Transaction $transaction, User $actor, array &$changed): void
+    {
+        if (! $transaction->transaction_type->isIssuance()
+            || $transaction->transaction_status !== TransactionStatus::Submitted
+            || blank($transaction->official_receipt)) {
+            return;
+        }
+
+        $this->workflow->receive($transaction, $transaction->or_date?->toDateString() ?? today()->toDateString(), $actor);
+        $changed[] = 'status (payment recorded)';
     }
 
     /**
@@ -321,7 +346,7 @@ final class TransactionRecorder
      * @param  array<string, mixed>  $attributes
      * @return list<string>
      */
-    private function dirtyKeys(\Illuminate\Database\Eloquent\Model $model, array $attributes): array
+    private function dirtyKeys(Model $model, array $attributes): array
     {
         $copy = $model->replicate();
         $copy->setRawAttributes($model->getAttributes(), true);

@@ -45,7 +45,7 @@ class TransactionScreensTest extends TestCase
         $submitted = TransactionStatus::Submitted->value;
 
         // Everything on the board, every active status present (zero included).
-        $this->actingAs($this->admin)->get('/admin/transactions')->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->admin)->get('/admin/transactions?office=all')->assertInertia(fn (Assert $page) => $page
             ->where("statusCounts.{$received}", 2)->where("statusCounts.{$submitted}", 1)->where('statusCounts.Completed', 0));
 
         // Another filter narrows the counts...
@@ -53,7 +53,7 @@ class TransactionScreensTest extends TestCase
             ->where("statusCounts.{$received}", 1)->where("statusCounts.{$submitted}", 1));
 
         // ...but choosing a status does not hide the others' counts.
-        $this->actingAs($this->admin)->get("/admin/transactions?status={$submitted}")->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->admin)->get("/admin/transactions?office=all&status={$submitted}")->assertInertia(fn (Assert $page) => $page
             ->where("statusCounts.{$received}", 2)->where("statusCounts.{$submitted}", 1));
     }
 
@@ -122,6 +122,20 @@ class TransactionScreensTest extends TestCase
         $this->assertSame(collect([$released->id, $approved->id])->sort()->values()->all(), $ids($props('?board=history')));
     }
 
+    public function test_the_office_filter_opens_on_esd_and_all_offices_is_explicit(): void
+    {
+        $esd = $this->make(TransactionStatus::Received, ['office_id' => 1]);
+        $this->make(TransactionStatus::Received, ['office_id' => 2]);
+
+        $ids = fn (string $query) => collect($this->actingAs($this->admin)->get("/admin/transactions{$query}")->viewData('page')['props']['transactions']['data'])->pluck('id')->all();
+
+        $this->assertSame([$esd->id], $ids(''));
+        $this->assertCount(2, $ids('?office=all'));
+        $this->assertCount(1, $ids('?office=2'));
+
+        $this->actingAs($this->admin)->get('/admin/transactions')->assertInertia(fn (Assert $page) => $page->where('filters.office', 1)->where('options.defaultOffice', 1));
+    }
+
     public function test_the_board_is_filtered_and_searched_in_sql(): void
     {
         $this->make(TransactionStatus::Received, ['lname' => 'Cruz', 'fname' => 'Ana', 'office_id' => 1, 'official_receipt' => '5550001']);
@@ -134,8 +148,8 @@ class TransactionScreensTest extends TestCase
         $this->assertCount(1, $ids('search=5550001'));
         $this->assertCount(2, $ids('office=2'));
         $this->assertCount(1, $ids('office=2&status=forwarded'));
-        $this->assertCount(1, $ids('type=Authentication'));
-        $this->assertCount(3, $ids('search='));
+        $this->assertCount(1, $ids('office=all&type=Authentication'));
+        $this->assertCount(3, $ids('office=all'));
         $this->assertCount(0, $ids('search=nobody'));
     }
 

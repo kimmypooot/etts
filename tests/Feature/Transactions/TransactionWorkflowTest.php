@@ -54,6 +54,18 @@ class TransactionWorkflowTest extends TestCase
         $this->assertSame(1, AuditLog::where('action', 'transaction.status_changed')->where('subject_id', $record->id)->count());
     }
 
+    public function test_an_esd_filed_spels_record_is_not_forwarded(): void
+    {
+        $record = $this->spels(TransactionStatus::Submitted, 1)->load('office');
+        $kinds = array_column($this->workflow->availableActions($record, $this->admin), 'kind');
+
+        $this->assertNotContains('forward', $kinds);
+        $this->assertContains('receive', $kinds);
+
+        $this->expectException(WorkflowException::class);
+        $this->workflow->forward($record, '2026-05-01', $this->admin);
+    }
+
     public function test_only_a_submitted_spels_record_can_be_forwarded(): void
     {
         $this->expectException(WorkflowException::class);
@@ -119,6 +131,52 @@ class TransactionWorkflowTest extends TestCase
     {
         $this->expectException(WorkflowException::class);
         $this->workflow->changeStatus($this->cert(TransactionStatus::Completed), TransactionStatus::Cancelled, $this->admin, remarks: 'Changed mind');
+    }
+
+    public function test_a_certification_can_be_cancelled_while_submitted_or_received(): void
+    {
+        foreach ([TransactionStatus::Submitted, TransactionStatus::Received] as $from) {
+            $record = $this->cert($from);
+            $this->workflow->changeStatus($record, TransactionStatus::Cancelled, $this->admin, remarks: 'Applicant withdrew');
+            $this->assertSame(TransactionStatus::Cancelled, $record->fresh()->transaction_status);
+        }
+    }
+
+    public function test_a_completed_released_or_cancelled_certification_cannot_be_cancelled(): void
+    {
+        foreach ([TransactionStatus::Completed, TransactionStatus::Released, TransactionStatus::Cancelled] as $from) {
+            try {
+                $this->workflow->changeStatus($this->cert($from), TransactionStatus::Cancelled, $this->admin, remarks: 'Too late');
+                $this->fail("A {$from->value} certification was cancelled.");
+            } catch (WorkflowException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function test_an_unpaid_certification_cannot_be_received(): void
+    {
+        $this->expectException(WorkflowException::class);
+        $this->workflow->receive($this->cert(TransactionStatus::Submitted), '2026-05-01', $this->admin);
+    }
+
+    public function test_a_paid_submitted_certification_can_be_received(): void
+    {
+        $record = $this->cert(TransactionStatus::Submitted, ['official_receipt' => 'OR-1', 'office_id' => 2]);
+
+        $this->workflow->receive($record, '2026-05-01', $this->admin);
+
+        $this->assertSame(TransactionStatus::Received, $record->fresh()->transaction_status);
+    }
+
+    public function test_a_certification_can_be_reverted_to_submitted_but_not_forwarded(): void
+    {
+        $record = $this->cert(TransactionStatus::Received);
+        $this->workflow->revert($record, TransactionStatus::Submitted, $this->admin);
+        $this->assertSame(TransactionStatus::Submitted, $record->fresh()->transaction_status);
+
+        $this->expectException(WorkflowException::class);
+        $this->workflow->revert($this->cert(TransactionStatus::Received), TransactionStatus::Forwarded, $this->admin);
     }
 
     public function test_a_reason_is_required_to_cancel_disapprove_or_return(): void
@@ -282,6 +340,9 @@ class TransactionWorkflowTest extends TestCase
         $this->assertSame(['Forward to RO'], $labels($this->spels(TransactionStatus::Submitted)));
         $this->assertSame(['Mark received'], $labels($this->spels(TransactionStatus::Forwarded)));
         $this->assertSame(['Approve', 'Disapprove', 'Return to applicant'], $labels($this->spels(TransactionStatus::Received)));
+        $this->assertSame(['Cancel transaction'], $labels($this->cert(TransactionStatus::Submitted)), 'Unpaid: only cancel; the OR number receives it.');
+        $this->assertSame(['Cancel transaction'], $labels($this->cert(TransactionStatus::Submitted, ['office_id' => 2])));
+        $this->assertSame(['Mark received', 'Cancel transaction'], $labels($this->cert(TransactionStatus::Submitted, ['official_receipt' => 'OR-1'])));
         $this->assertSame(['Mark completed', 'Cancel transaction'], $labels($this->cert(TransactionStatus::Received)));
         $this->assertSame(['Mark released'], $labels($this->cert(TransactionStatus::Completed)));
         $this->assertSame([], $labels($this->cert(TransactionStatus::Released)));
