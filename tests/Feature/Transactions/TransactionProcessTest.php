@@ -146,6 +146,44 @@ class TransactionProcessTest extends TestCase
         $this->step(1, $record, [...$input, 'version' => $this->props($record)['version']])->assertSessionHas('status');
     }
 
+    public function test_a_step_that_changes_only_issuance_fields_moves_the_version(): void
+    {
+        $record = $this->issuance();
+        $before = $this->version($record);
+        $this->travel(5)->minutes();
+
+        $this->step(2, $record, ['eligibility' => 'CHANGED', 'date_of_exam_issuance' => '2020-03-15', 'place_of_exam_issuance' => 'Tacloban', 'version' => $before])
+            ->assertSessionHas('status');
+
+        $this->assertNotSame($before, $this->version($record));
+
+        // A second processor still holding the old version is refused, not silently overwriting.
+        $this->step(2, $record, ['eligibility' => 'OTHER', 'date_of_exam_issuance' => '2020-03-15', 'place_of_exam_issuance' => 'Tacloban', 'version' => $before])
+            ->assertSessionHas('error');
+        $this->assertSame('CHANGED', $record->fresh()->issuanceRequest->eligibility);
+    }
+
+    public function test_steps_one_to_three_keep_the_stored_amount_and_details(): void
+    {
+        $record = $this->issuance(record: ['transaction_details' => 'COE-2, Auth-1 rush', 'amount' => 999]);
+
+        $this->step(1, $record, ['lname' => 'Cruz', 'fname' => 'Anna', 'purpose_of_request' => 'Employment'])->assertSessionHas('status');
+
+        $fresh = $record->fresh();
+        $this->assertSame('Anna', $fresh->fname);
+        $this->assertSame('COE-2, Auth-1 rush', $fresh->transaction_details);
+        $this->assertSame(999, (int) $fresh->amount);
+    }
+
+    public function test_a_locked_record_with_a_blank_field_still_reaches_print_and_finish(): void
+    {
+        $record = $this->issuance([...self::COMPLETE, 'book' => null], TransactionStatus::Completed);
+
+        $this->assertSame(5, $this->props($record)['step']);
+        $this->assertSame(2, $this->props($record, '?step=2')['step']);
+        $this->assertSame(4, $this->props($record, '?step=4')['step']);
+    }
+
     public function test_a_stale_version_is_refused(): void
     {
         $record = $this->issuance();

@@ -39,7 +39,10 @@ class TransactionProcessController extends Controller
 
         $form = $this->presenter()->edit($transaction->loadMissing('office'));
         $record = $form['record'];
-        $first = ProcessSteps::firstIncompleteStep($record);
+        $locked = ProcessSteps::isLocked($transaction);
+        // A locked record cannot be saved, so a blank field must not keep it
+        // from printing or releasing: every step is open, defaulting to step 5.
+        $first = $locked ? 5 : ProcessSteps::firstIncompleteStep($record);
         $requested = (int) $request->query('step', $first);
 
         return Inertia::render('Transactions/Process', [
@@ -51,7 +54,7 @@ class TransactionProcessController extends Controller
                 'missing' => $step < 5 ? ProcessSteps::missing($step, $record) : [],
             ], array_keys(self::LABELS)),
             'step' => $requested >= 1 && $requested <= $first ? $requested : $first,
-            'locked' => ProcessSteps::isLocked($transaction),
+            'locked' => $locked,
             'finish' => $finish = ProcessSteps::finishAction($transaction),
             'finishStatus' => match ($finish) {
                 'complete' => TransactionStatus::Completed->value,
@@ -74,6 +77,12 @@ class TransactionProcessController extends Controller
             ...$this->presenter()->edit($transaction)['record'],
             ...$request->safe()->only(ProcessSteps::fields($step)),
         ];
+
+        // Only step 4 prices the record: without copies the recorder keeps the
+        // stored amount and details, so steps 1–3 never reprice behind the processor's back.
+        if ($step !== 4) {
+            unset($values['coe_copies'], $values['auth_copies']);
+        }
 
         try {
             $this->recorder->update(

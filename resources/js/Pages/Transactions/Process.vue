@@ -64,7 +64,8 @@ watch(
 );
 
 // The furthest step that can be opened: the first one still incomplete.
-const reachable = computed(() => props.steps.find((s) => s.number < 5 && s.missing.length > 0)?.number ?? 5);
+// A locked record cannot be saved, so every step stays open for printing and release.
+const reachable = computed(() => (props.locked ? 5 : (props.steps.find((s) => s.number < 5 && s.missing.length > 0)?.number ?? 5)));
 const currentStep = computed(() => props.steps[current.value - 1]);
 
 // Leaving a step with unsaved edits asks first.
@@ -89,6 +90,15 @@ const save = () => {
     form.post(`${props.base}/${props.id}/process/${current.value}`, {
         preserveScroll: true,
         forceFormData: current.value === 4,
+        onSuccess: (page) => {
+            // A refusal (stale version, locked) comes back as a flash error: stay put.
+            if (page.props.flash?.error) return;
+            // Props are fresh by now. Re-baseline from them even when the version did
+            // not move, and follow the server's next step even when its number is unchanged.
+            form.defaults(values());
+            form.reset();
+            current.value = props.step;
+        },
     });
 };
 

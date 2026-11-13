@@ -196,6 +196,12 @@ final class TransactionRecorder
 
                 $changed = [...$changed, ...$this->dirtyKeys($issuance, $values)];
                 $issuance->forceFill($values)->save();
+
+                // The record's version is its updated_at: a change to the request
+                // form alone must move it too, or the optimistic lock misses it.
+                if ($changed !== [] && ! $locked->wasChanged()) {
+                    $locked->touch();
+                }
             }
 
             $this->confirmWalkIn($locked, $fields, $actor, $changed);
