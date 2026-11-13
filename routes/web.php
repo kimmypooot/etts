@@ -23,6 +23,7 @@ use App\Http\Controllers\TransactionDeletionController;
 use App\Http\Controllers\TransactionExportController;
 use App\Http\Controllers\TransactionFormController;
 use App\Http\Controllers\TransactionPrintController;
+use App\Http\Controllers\TransactionProcessController;
 use App\Http\Controllers\TransactionPulseController;
 use App\Http\Controllers\TransactionStatusController;
 use App\Http\Controllers\TransactionTimelineController;
@@ -108,6 +109,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/transactions/pulse', TransactionPulseController::class)->can('viewAny', Transaction::class)->name('transactions.pulse');
         Route::get('/transactions/export', TransactionExportController::class)->can('export', Transaction::class)->name('transactions.export');
         Route::get('/transactions/{transaction}/edit', [TransactionFormController::class, 'edit'])->can('manage', 'transaction')->name('transactions.edit');
+        // Certifications and authentications are processed step by step (SPELS keeps the edit form).
+        Route::get('/transactions/{transaction}/process', [TransactionProcessController::class, 'show'])->can('manage', 'transaction')->name('transactions.process');
+        Route::post('/transactions/{transaction}/process/vcas', [TransactionProcessController::class, 'vcas'])->can('manage', 'transaction')->name('transactions.process.vcas');
+        Route::post('/transactions/{transaction}/process/{step}', [TransactionProcessController::class, 'save'])->where('step', '[1-4]')->can('manage', 'transaction')->name('transactions.process.save');
         Route::put('/transactions/{transaction}', [TransactionFormController::class, 'update'])->can('manage', 'transaction')->name('transactions.update');
         Route::patch('/transactions/{transaction}/quick', [TransactionFormController::class, 'quick'])->can('manage', 'transaction')->name('transactions.quick');
         Route::get('/transactions/{transaction}/errf', [TransactionPrintController::class, 'errf'])->can('manage', 'transaction')->name('transactions.print.errf');

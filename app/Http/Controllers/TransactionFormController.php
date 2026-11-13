@@ -54,8 +54,13 @@ class TransactionFormController extends Controller
         return redirect()->route('transactions.index')->with('status', "Transaction #{$transaction->id} created.");
     }
 
-    public function edit(Transaction $transaction): Response
+    public function edit(Transaction $transaction): Response|RedirectResponse
     {
+        // Certifications and authentications are processed on their own page.
+        if ($transaction->transaction_type->isIssuance()) {
+            return redirect()->route('transactions.process', $transaction);
+        }
+
         return Inertia::render('Transactions/Form', $this->presenter()->edit($transaction));
     }
 

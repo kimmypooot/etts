@@ -235,16 +235,18 @@ class TransactionFormTest extends TestCase
 
     // ─── Edit ─────────────────────────────────────────────────────────────
 
-    public function test_the_edit_form_opens_with_the_record_its_copies_and_a_version(): void
+    public function test_the_processing_page_opens_with_the_record_its_copies_and_a_version(): void
     {
         $record = Transaction::factory()->create(['transaction_type' => TransactionType::Authentication, 'office_id' => 1, 'transaction_details' => 'COE-1, AUTH-2', 'amount' => 200, 'transaction_status' => TransactionStatus::Received]);
         IssuanceRequest::create(['transaction_id' => $record->id, 'purpose_of_request' => 'Others: Visa', 'attachment_1' => 'abc.jpg']);
 
         $this->actingAs($this->admin)->get("/admin/transactions/{$record->id}/edit")
+            ->assertRedirect("/admin/transactions/{$record->id}/process");
+
+        $this->actingAs($this->admin)->get("/admin/transactions/{$record->id}/process")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Transactions/Form')
-                ->where('mode', 'edit')
+                ->component('Transactions/Process')
                 ->where('record.coe_copies', 1)
                 ->where('record.auth_copies', 2)
                 ->where('record.purpose_of_request', 'Others')
