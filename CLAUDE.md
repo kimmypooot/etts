@@ -7,6 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Laravel 13 + Vue 3 + Inertia 3 + Tailwind v4 + MySQL. See `README.md` for
 setup and `docs/migration-plan.md` for the rebuild plan, findings and phases.
 `docs/CUTOVER_RUNBOOK.md` covers the legacy sync, final import and cutover.
+`docs/PROCESS_TRANSACTION_FLOW.md` records how the legacy issuance
+processing page behaves, as the baseline for its rebuild.
 
 ESD Transactions Tracking System for CSC Regional Office VIII: certifications,
 authentications and SPELS applications, transmittals between ESD and field
@@ -27,8 +29,8 @@ offices, and a walk-in kiosk.
 - Applicant attachments live on the private `attachments` disk and are served
   only through an authorised, audited controller. Never put them under
   `public/`.
-- Status strings come from one enum (Phase 2). Never use raw status strings
-  in code or SQL.
+- Status strings come from the enums in `app/Enums`. Never use raw status
+  strings in code or SQL.
 
 ## Commands
 
@@ -44,6 +46,11 @@ vendor/bin/pint                # code style (Laravel Pint)
 
 Tests run on SQLite `:memory:` (see `phpunit.xml`), so SQL that goes through
 `App\Support\Sql` must stay portable between MySQL and SQLite.
+`composer test` does the same as `php artisan test` but clears cached config
+first.
+
+The Laravel Boost MCP server (`.mcp.json`, `php artisan boost:mcp`) gives
+schema, query, log and docs-search tools for this app.
 
 Artisan commands (`app/Console/Commands`), all about the legacy migration:
 `etts:import-legacy`, `etts:import-legacy-transactions [--fresh]`,
@@ -55,13 +62,23 @@ Artisan commands (`app/Console/Commands`), all about the legacy migration:
 
 - **Thin controllers, logic in `app/Services/*`**: `Transactions`
   (`TransactionRecorder`, `TransactionWorkflow`, `TransactionArchiver`,
-  `AttachmentStore`, `BoardFilters`), `Transmittals`, `Spels` (duplicate
+  `AttachmentStore`, `BoardFilters`, `ProcessSteps`, `VcasLink`),
+  `Transmittals`, `Spels` (duplicate
   check vs duplicate audit are deliberately separate classes), `Reports`,
   `Kiosk`, `Imis` (people directory), `Legacy` (import and sync).
   Authorization is a policy per model (`app/Policies`) plus route `->can()`.
 - **Office scoping**: `App\Models\Scopes\OfficeScope` plus policies. `Fo\*`
   controllers are the field-office portal; the root controllers are the ESD
   (admin) side. Users who work for several offices pick one via `/office`.
+  `ApplyActiveOffice` middleware then sets `$user->office_id` to the chosen
+  office for the rest of the request. The choice is kept in the session and
+  checked against the offices IMIS returned at sign-in. Scopes and policies
+  just read `office_id`. Never save the chosen office to the account.
+- **Issuance processing page**: `ProcessSteps` is the one place that sets
+  the fields per step, the required fields, the current step and whether a
+  record can still be edited. The controller, the form request and the page
+  all use it. `VcasLink` builds the `vcas://` launcher URL from the saved
+  record, encoding each value on its own.
 - **Enums** (`app/Enums`): `TransactionStatus`, `TransactionType`,
   `TransmittalStatus`, `TransmittalDirection` (`ESD_TO_FO`, `FO_TO_RO`),
   `DeletionReason`, `UserRole`.
