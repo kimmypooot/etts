@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AcquisitionCategory;
+use App\Enums\PositionLevel;
 use App\Http\Requests\EligibilityRequest;
 use App\Models\AuditLog;
 use App\Models\Eligibility;
@@ -40,19 +42,28 @@ class EligibilityController extends Controller
                 'id' => $eligibility->id,
                 'code' => $eligibility->code,
                 'name' => $eligibility->name,
+                'acquisition_category' => $eligibility->acquisition_category?->value,
+                'acquisition_category_label' => $eligibility->acquisition_category?->label(),
+                'position_level_equivalent' => $eligibility->position_level_equivalent?->value,
+                'position_level_equivalent_label' => $eligibility->position_level_equivalent?->label(),
+                'legal_basis' => $eligibility->legal_basis,
                 'usage_count' => (int) $eligibility->usage_count,
             ]);
 
         return Inertia::render('Eligibilities/Index', [
             'eligibilities' => $eligibilities,
             'filters' => ['search' => $search, 'sort' => $sort, 'dir' => $direction],
+            'options' => [
+                'acquisitionCategories' => AcquisitionCategory::options(),
+                'positionLevels' => PositionLevel::options(),
+            ],
         ]);
     }
 
     public function store(EligibilityRequest $request): RedirectResponse
     {
         $eligibility = Eligibility::create($request->validated());
-        AuditLog::record('eligibility.created', $eligibility, after: $eligibility->only('code', 'name'));
+        AuditLog::record('eligibility.created', $eligibility, after: $eligibility->auditValues());
 
         return back()->with('status', "{$eligibility->code} added.");
     }
@@ -65,9 +76,9 @@ class EligibilityController extends Controller
             return back()->withErrors(['code' => 'This code is used by existing records, so it cannot be changed. You can still edit the title.']);
         }
 
-        $before = $eligibility->only('code', 'name');
+        $before = $eligibility->auditValues();
         $eligibility->update($data);
-        AuditLog::record('eligibility.updated', $eligibility, before: $before, after: $eligibility->only('code', 'name'));
+        AuditLog::record('eligibility.updated', $eligibility, before: $before, after: $eligibility->auditValues());
 
         return back()->with('status', 'Eligibility updated.');
     }
@@ -80,7 +91,7 @@ class EligibilityController extends Controller
             return back()->with('error', "{$eligibility->code} is used by {$usage} record(s) and cannot be deleted.");
         }
 
-        $before = $eligibility->only('code', 'name');
+        $before = $eligibility->auditValues();
         $eligibility->delete();
         AuditLog::record('eligibility.deleted', $eligibility, before: $before);
 

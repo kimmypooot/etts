@@ -12,12 +12,20 @@ import Icon from '@/Components/UI/Icon.vue';
 import Modal from '@/Components/Feedback/Modal.vue';
 import TextInput from '@/Components/Forms/TextInput.vue';
 import InputError from '@/Components/Forms/InputError.vue';
+import FormGroup from '@/Components/Forms/FormGroup.vue';
+import Select from '@/Components/Forms/Select.vue';
 import { confirm } from '@/Composables/useDialog';
 
 const props = defineProps({
     eligibilities: { type: Object, required: true },
     filters: { type: Object, required: true },
+    options: { type: Object, required: true },
 });
+
+// The classification is optional: "Not set" sends a blank, which clears it.
+const notSet = { value: '', label: 'Not set' };
+const categoryOptions = [notSet, ...props.options.acquisitionCategories];
+const levelOptions = [notSet, ...props.options.positionLevels];
 
 const filters = reactive({
     search: props.filters.search ?? '',
@@ -54,11 +62,17 @@ const ariaSort = (column) => (filters.sort === column ? (filters.dir === 'asc' ?
 // Add or edit, in one modal.
 const editing = ref(null);
 const formOpen = ref(false);
-const form = useForm({ code: '', name: '' });
+const form = useForm({ code: '', name: '', acquisition_category: '', position_level_equivalent: '', legal_basis: '' });
 
 const openForm = (eligibility = null) => {
     editing.value = eligibility;
-    form.defaults({ code: eligibility?.code ?? '', name: eligibility?.name ?? '' });
+    form.defaults({
+        code: eligibility?.code ?? '',
+        name: eligibility?.name ?? '',
+        acquisition_category: eligibility?.acquisition_category ?? '',
+        position_level_equivalent: eligibility?.position_level_equivalent ?? '',
+        legal_basis: eligibility?.legal_basis ?? '',
+    });
     form.reset();
     form.clearErrors();
     formOpen.value = true;
@@ -93,7 +107,7 @@ const inputClass =
     <StaffLayout>
         <PageHeader
             title="Eligibilities"
-            description="The eligibilities a transaction can be filed under. A code that is in use cannot be deleted or renamed."
+            description="The eligibilities a transaction can be filed under. Special eligibility applications offer only those obtained by special grant. A code that is in use cannot be deleted or renamed."
             :breadcrumbs="[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Eligibilities' }]"
         >
             <template #actions>
@@ -124,6 +138,9 @@ const inputClass =
                     <th scope="col" :aria-sort="ariaSort('name')">
                         <button type="button" class="font-semibold hover:underline" @click="sortBy('name')">Title</button>
                     </th>
+                    <th scope="col">Acquisition</th>
+                    <th scope="col">Position level</th>
+                    <th scope="col">Legal basis</th>
                     <th scope="col">Records</th>
                     <th scope="col"><span class="sr-only">Actions</span></th>
                 </tr>
@@ -131,7 +148,19 @@ const inputClass =
             <tbody>
                 <tr v-for="eligibility in eligibilities.data" :key="eligibility.id">
                     <td class="font-medium whitespace-nowrap">{{ eligibility.code }}</td>
-                    <td>{{ eligibility.name }}</td>
+                    <td class="min-w-48">{{ eligibility.name }}</td>
+                    <td class="whitespace-nowrap">
+                        <Badge v-if="eligibility.acquisition_category_label" tone="neutral">{{ eligibility.acquisition_category_label }}</Badge>
+                        <span v-else class="text-text-muted">Not set</span>
+                    </td>
+                    <td class="whitespace-nowrap">
+                        <Badge v-if="eligibility.position_level_equivalent_label" tone="neutral">{{ eligibility.position_level_equivalent_label }}</Badge>
+                        <span v-else class="text-text-muted">Not set</span>
+                    </td>
+                    <td class="min-w-40">
+                        <template v-if="eligibility.legal_basis">{{ eligibility.legal_basis }}</template>
+                        <span v-else class="text-text-muted">Not set</span>
+                    </td>
                     <td>
                         <Badge :tone="eligibility.usage_count > 0 ? 'info' : 'neutral'">{{ eligibility.usage_count }}</Badge>
                     </td>
@@ -171,6 +200,14 @@ const inputClass =
                 <InputError :message="form.errors.code" />
                 <TextInput id="eligibility-name" v-model="form.name" label="Title" required :invalid="!!form.errors.name" />
                 <InputError :message="form.errors.name" />
+                <FormGroup id="eligibility-category" label="Acquisition category" :error="form.errors.acquisition_category">
+                    <Select id="eligibility-category" v-model="form.acquisition_category" :options="categoryOptions" :invalid="!!form.errors.acquisition_category" />
+                </FormGroup>
+                <FormGroup id="eligibility-level" label="Position level equivalent" :error="form.errors.position_level_equivalent">
+                    <Select id="eligibility-level" v-model="form.position_level_equivalent" :options="levelOptions" :invalid="!!form.errors.position_level_equivalent" />
+                </FormGroup>
+                <TextInput id="eligibility-basis" v-model="form.legal_basis" label="Legal basis" :invalid="!!form.errors.legal_basis" />
+                <InputError :message="form.errors.legal_basis" />
             </form>
             <template #footer>
                 <Button variant="secondary" @click="formOpen = false">Cancel</Button>
