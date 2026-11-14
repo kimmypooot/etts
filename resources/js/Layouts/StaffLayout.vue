@@ -53,6 +53,7 @@ const navItems = [
 
     { heading: 'Settings' },
     { label: 'Eligibility Types', href: '/admin/eligibilities', icon: 'tag', permission: 'eligibilities.manage' },
+    { label: 'Places of Examination', href: '/admin/exam-centers', icon: 'globe', permission: 'examCenters.manage' },
     { label: 'Kiosks', href: '/admin/kiosks', icon: 'desktop', permission: 'kiosks.manage' },
     { label: 'Staff', href: '/admin/users', icon: 'users', permission: 'activity.view' },
     { label: 'Sync from Legacy', href: '/admin/legacy-sync', icon: 'refresh', permission: 'activity.view' },

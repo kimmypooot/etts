@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\DeletedTransaction;
 use App\Models\KioskTerminal;
 use App\Models\Eligibility;
+use App\Models\ExamCenter;
 use App\Models\Office;
 use App\Models\Transaction;
 use App\Models\Transmittal;
@@ -57,6 +58,7 @@ class HandleInertiaRequests extends Middleware
                     'kiosks.manage' => $user->can('viewAny', KioskTerminal::class),
                     'archive.view' => $user->can('viewAny', DeletedTransaction::class),
                     'eligibilities.manage' => $user->can('viewAny', Eligibility::class),
+                    'examCenters.manage' => $user->can('viewAny', ExamCenter::class),
                 ])) : [],
             ],
             'imisUrl' => config('services.imis.portal_url'),
