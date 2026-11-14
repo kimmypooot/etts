@@ -24,7 +24,6 @@ const props = defineProps({
     issuanceEligibilities: { type: Array, default: () => [] },
     examCenters: { type: Array, default: () => [] },
     purposes: { type: Array, required: true },
-    maxMb: { type: Number, default: 5 },
 });
 
 const page = usePage();
@@ -33,12 +32,11 @@ const base = computed(() => page.props.kiosk.base);
 const steps = computed(() =>
     props.spels
         ? [{ key: 'privacy', label: 'Privacy' }, { key: 'eligibility', label: 'Eligibility' }, { key: 'you', label: 'About you' }, { key: 'review', label: 'Review' }]
-        : [{ key: 'privacy', label: 'Privacy' }, { key: 'you', label: 'About you' }, { key: 'request', label: 'Your request' }, { key: 'review', label: 'Review' }],
+        : [{ key: 'privacy', label: 'Privacy' }, { key: 'record', label: 'Eligibility record' }, { key: 'you', label: 'About you' }, { key: 'request', label: 'Your request' }, { key: 'review', label: 'Review' }],
 );
 
 const step = ref(0);
 const current = computed(() => steps.value[step.value].key);
-const differentName = ref(false);
 
 const form = useForm({
     transaction_type: props.type,
@@ -51,7 +49,6 @@ const form = useForm({
     purpose_of_request: '', purpose_others: '',
     used_lastname: '', used_firstname: '', used_middlename: '', used_extn: '',
     eligibility: '', date_of_exam_issuance: '', place_of_exam_issuance: '',
-    attachment_1: null, attachment_2: null,
 });
 
 // ─── Steps and their fields ───────────────────────────────────────────────
@@ -59,7 +56,8 @@ const fieldsOf = {
     privacy: ['privacy_acknowledged'],
     eligibility: ['elig_code'],
     you: ['lname', 'fname', 'mname', 'extn', 'sex', 'mobile', 'email', 'civil_status', 'date_of_birth', 'place_of_birth', 'current_address', 'employment_status', 'company_name', 'company_address'],
-    request: ['purpose_of_request', 'purpose_others', 'used_lastname', 'used_firstname', 'used_middlename', 'used_extn', 'eligibility', 'date_of_exam_issuance', 'place_of_exam_issuance', 'attachment_1', 'attachment_2'],
+    record: ['eligibility', 'date_of_exam_issuance', 'place_of_exam_issuance', 'used_lastname', 'used_firstname', 'used_middlename', 'used_extn'],
+    request: ['purpose_of_request', 'purpose_others'],
     review: ['form'],
 };
 
@@ -75,7 +73,27 @@ const validate = (key) => {
     if (key === 'you') {
         need('lname', 'Please enter your last name.');
         need('fname', 'Please enter your first name.');
-        if (!props.spels) need('current_address', 'Please enter your current address.');
+        need('sex', 'Please choose your sex.');
+        need('mobile', 'Please enter your mobile number.');
+        need('email', 'Please enter your email address.');
+        if (!props.spels) {
+            need('date_of_birth', 'Please enter your date of birth.');
+            need('place_of_birth', 'Please enter your place of birth.');
+            need('current_address', 'Please enter your current address.');
+            need('civil_status', 'Please choose your civil status.');
+            need('employment_status', 'Please choose your employment.');
+            if (['Employed', 'Self-Employed'].includes(form.employment_status)) {
+                need('company_name', 'Please enter your company or agency.');
+                need('company_address', 'Please enter your company address.');
+            }
+        }
+    }
+    if (key === 'record') {
+        need('eligibility', 'Please choose your eligibility.');
+        need('date_of_exam_issuance', 'Please enter the date of examination or issuance.');
+        need('place_of_exam_issuance', 'Please choose the place of examination or issuance.');
+        need('used_lastname', 'Please enter the last name you used.');
+        need('used_firstname', 'Please enter the first name you used.');
     }
     if (key === 'request') {
         need('purpose_of_request', 'Please tell us what the request is for.');
@@ -112,7 +130,6 @@ const duplicate = computed(() => form.errors.reason === 'spels_duplicate');
 const submit = () => {
     form.transform((data) => ({
         ...data,
-        ...(differentName.value ? {} : { used_lastname: '', used_firstname: '', used_middlename: '', used_extn: '' }),
         ...(props.spels ? {} : { elig_code: '' }),
     })).post(`${base.value}/requests`, {
         forceFormData: true,
@@ -136,13 +153,6 @@ const others = computed(() => props.eligibilities.filter((e) => !e.featured));
 const otherSelected = computed(() => others.value.some((e) => e.code === form.elig_code));
 const chosenEligibility = computed(() => props.eligibilities.find((e) => e.code === form.elig_code));
 
-const setFile = (slot, event) => {
-    const file = event.target.files?.[0] ?? null;
-    form[`attachment_${slot}`] = file && file.size > props.maxMb * 1024 * 1024 ? null : file;
-    if (file && file.size > props.maxMb * 1024 * 1024) local[`attachment_${slot}`] = `A file may not be larger than ${props.maxMb} MB.`;
-    else delete local[`attachment_${slot}`];
-};
-
 const fullName = computed(() => [form.fname, form.mname, form.lname, form.extn].filter(Boolean).join(' '));
 const formatDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '');
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
@@ -158,11 +168,12 @@ const review = computed(() => {
     if (props.spels) {
         rows.unshift({ section: 'elig', title: 'Eligibility', go: 1, items: [['Applying for', chosenEligibility.value ? `${chosenEligibility.value.name} (${chosenEligibility.value.code})` : '']] });
     } else {
+        rows.unshift({ section: 'record', title: 'Eligibility record', go: steps.value.findIndex((s) => s.key === 'record'), items: [
+            ['Eligibility', form.eligibility], ['Date of examination / issuance', formatDate(form.date_of_exam_issuance)], ['Place of examination / issuance', form.place_of_exam_issuance],
+            ['Name used in Examination / Issuance of Eligibility', [form.used_firstname, form.used_middlename, form.used_lastname, form.used_extn].filter((part) => part && part.toUpperCase() !== 'N/A').join(' ')],
+        ] });
         rows.push({ section: 'request', title: 'Your request', go: steps.value.findIndex((s) => s.key === 'request'), items: [
             ['Purpose', form.purpose_of_request === 'Others' ? `Others: ${form.purpose_others}` : form.purpose_of_request],
-            ...(differentName.value ? [['Name used in the examination', [form.used_firstname, form.used_middlename, form.used_lastname, form.used_extn].filter(Boolean).join(' ')]] : []),
-            ['Eligibility', form.eligibility], ['Date of examination', formatDate(form.date_of_exam_issuance)], ['Place of examination', form.place_of_exam_issuance],
-            ['Attachments', [form.attachment_1?.name, form.attachment_2?.name].filter(Boolean).join(', ')],
         ] });
     }
 
@@ -246,84 +257,76 @@ const review = computed(() => {
                         <p v-if="errorOf('elig_code')" class="flex items-center gap-2 text-base font-medium text-danger" role="alert" aria-invalid="true"><KioskIcon name="alert" :size="20" />{{ errorOf('elig_code') }}</p>
                     </section>
 
+                    <!-- Eligibility record (certification and authentication) -->
+                    <section v-else-if="current === 'record'" class="chart-rise space-y-6" aria-labelledby="record-title">
+                        <header>
+                            <h1 id="record-title" class="text-3xl font-semibold tracking-tight text-text">Your eligibility record</h1>
+                            <p class="mt-2 text-lg text-text-muted">Tell us about the eligibility on your certificate.</p>
+                        </header>
+                        <div class="rounded-2xl bg-surface-muted/70 p-5 sm:p-6">
+                            <div class="grid gap-5 sm:grid-cols-2">
+                                <KSelect v-model="form.eligibility" label="Eligibility" required :options="issuanceEligibilities" class="sm:col-span-2" :error="errorOf('eligibility')" />
+                                <KField v-model="form.date_of_exam_issuance" label="Date of Examination / Issuance" type="date" required :max="today" :error="errorOf('date_of_exam_issuance')" />
+                                <KSelect v-model="form.place_of_exam_issuance" label="Place of Examination / Issuance" required :options="examCenters" :error="errorOf('place_of_exam_issuance')" />
+                            </div>
+                            <h2 class="mt-6 mb-1 text-xl font-semibold text-text">Name used in Examination / Issuance of Eligibility</h2>
+                            <p class="mb-4 text-base text-text-muted">Exactly as it appears on your certificate, even if it is the same as your name today. Type N/A if you had no middle name or extension.</p>
+                            <div class="grid gap-5 sm:grid-cols-2">
+                                <KField v-model="form.used_lastname" label="Last name used" required :error="errorOf('used_lastname')" />
+                                <KField v-model="form.used_firstname" label="First name used" required :error="errorOf('used_firstname')" />
+                                <KField v-model="form.used_middlename" label="Middle name used" hint="Optional" :error="errorOf('used_middlename')" />
+                                <KField v-model="form.used_extn" label="Extension used" hint="Optional. Jr., Sr., III" :error="errorOf('used_extn')" />
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- About you -->
                     <section v-else-if="current === 'you'" class="chart-rise space-y-6" aria-labelledby="you-title">
                         <header>
                             <h1 id="you-title" class="text-3xl font-semibold tracking-tight text-text">About you</h1>
                             <p class="mt-2 text-lg text-text-muted">Please use your name as it appears on your records.</p>
                         </header>
-                        <div class="grid gap-5 sm:grid-cols-2">
-                            <KField v-model="form.lname" label="Last name" required :error="errorOf('lname')" />
-                            <KField v-model="form.fname" label="First name" required :error="errorOf('fname')" />
-                            <KField v-model="form.mname" label="Middle name" :error="errorOf('mname')" />
-                            <KField v-model="form.extn" label="Extension" hint="Jr., Sr., III" :maxlength="10" :error="errorOf('extn')" />
-                        </div>
-                        <KChoice v-model="form.sex" label="Sex" :options="['Male', 'Female']" :error="errorOf('sex')" />
-                        <div class="grid gap-5 sm:grid-cols-2">
-                            <KField v-model="form.mobile" label="Mobile number" type="tel" inputmode="tel" :maxlength="12" hint="So we can reach you about your request." :error="errorOf('mobile')" />
-                            <KField v-model="form.email" label="Email address" type="email" inputmode="email" :error="errorOf('email')" />
+                        <div class="rounded-2xl bg-surface-muted/70 p-5 sm:p-6">
+                            <h2 class="mb-4 text-xl font-semibold text-text">Primary information</h2>
+                            <div class="grid gap-5 sm:grid-cols-2">
+                                <KField v-model="form.lname" label="Last name" required :error="errorOf('lname')" />
+                                <KField v-model="form.fname" label="First name" required :error="errorOf('fname')" />
+                                <KField v-model="form.mname" label="Middle name" hint="Optional" :error="errorOf('mname')" />
+                                <KField v-model="form.extn" label="Extension" hint="Optional. Jr., Sr., III" :maxlength="10" :error="errorOf('extn')" />
+                                <template v-if="!spels">
+                                    <KField v-model="form.date_of_birth" label="Date of birth" type="date" required :max="today" :error="errorOf('date_of_birth')" />
+                                    <KField v-model="form.place_of_birth" label="Place of birth" required :error="errorOf('place_of_birth')" />
+                                </template>
+                            </div>
                         </div>
 
-                        <template v-if="!spels">
-                            <KField v-model="form.current_address" label="Current address" multiline required :maxlength="500" :error="errorOf('current_address')" />
-                            <KChoice v-model="form.civil_status" label="Civil status" :options="['Single', 'Married', 'Widowed', 'Separated']" columns="sm:grid-cols-4" :error="errorOf('civil_status')" />
+                        <div class="space-y-5">
+                            <h2 class="text-xl font-semibold text-text">Other details</h2>
+                            <KChoice v-model="form.sex" label="Sex" required :options="['Male', 'Female']" :error="errorOf('sex')" />
                             <div class="grid gap-5 sm:grid-cols-2">
-                                <KField v-model="form.date_of_birth" label="Date of birth" type="date" :max="today" :error="errorOf('date_of_birth')" />
-                                <KField v-model="form.place_of_birth" label="Place of birth" :error="errorOf('place_of_birth')" />
+                                <KField v-model="form.mobile" label="Mobile number" required type="tel" inputmode="tel" :maxlength="12" hint="So we can reach you about your request." :error="errorOf('mobile')" />
+                                <KField v-model="form.email" label="Email address" required type="email" inputmode="email" :error="errorOf('email')" />
                             </div>
-                            <KChoice v-model="form.employment_status" label="Employment" :options="['Employed', 'Self-Employed', 'Unemployed']" columns="sm:grid-cols-3" :error="errorOf('employment_status')" />
-                            <div v-if="form.employment_status === 'Employed' || form.employment_status === 'Self-Employed'" class="grid gap-5 sm:grid-cols-2">
-                                <KField v-model="form.company_name" label="Company or agency" :error="errorOf('company_name')" />
-                                <KField v-model="form.company_address" label="Company address" :error="errorOf('company_address')" />
-                            </div>
-                        </template>
+                            <template v-if="!spels">
+                                <KField v-model="form.current_address" label="Current address" multiline required :maxlength="500" :error="errorOf('current_address')" />
+                                <KChoice v-model="form.civil_status" label="Civil status" required :options="['Single', 'Married', 'Widowed', 'Separated']" columns="sm:grid-cols-4" :error="errorOf('civil_status')" />
+                                <KChoice v-model="form.employment_status" label="Employment" required :options="['Employed', 'Self-Employed', 'Unemployed']" columns="sm:grid-cols-3" :error="errorOf('employment_status')" />
+                                <div v-if="form.employment_status === 'Employed' || form.employment_status === 'Self-Employed'" class="grid gap-5 sm:grid-cols-2">
+                                    <KField v-model="form.company_name" label="Company or agency" required :error="errorOf('company_name')" />
+                                    <KField v-model="form.company_address" label="Company address" required :error="errorOf('company_address')" />
+                                </div>
+                            </template>
+                        </div>
                     </section>
 
                     <!-- Your request (certification and authentication) -->
                     <section v-else-if="current === 'request'" class="chart-rise space-y-6" aria-labelledby="req-title">
                         <header>
                             <h1 id="req-title" class="text-3xl font-semibold tracking-tight text-text">Your request</h1>
-                            <p class="mt-2 text-lg text-text-muted">Tell us what it is for and about your eligibility.</p>
+                            <p class="mt-2 text-lg text-text-muted">Tell us what it is for.</p>
                         </header>
                         <KChoice v-model="form.purpose_of_request" label="What is the request for?" required :options="[...purposes, 'Others']" columns="sm:grid-cols-2" :error="errorOf('purpose_of_request')" />
                         <KField v-if="form.purpose_of_request === 'Others'" v-model="form.purpose_others" label="Please tell us more" required :maxlength="80" :error="errorOf('purpose_others')" />
-
-                        <div class="rounded-2xl bg-surface-muted/70 p-5 sm:p-6">
-                            <h2 class="mb-4 text-xl font-semibold text-text">Your eligibility record</h2>
-                            <div class="grid gap-5 sm:grid-cols-2">
-                                <KSelect v-model="form.eligibility" label="Eligibility" :options="issuanceEligibilities" class="sm:col-span-2" :error="errorOf('eligibility')" />
-                                <KField v-model="form.date_of_exam_issuance" label="Date of examination or grant" type="date" :max="today" :error="errorOf('date_of_exam_issuance')" />
-                                <KSelect v-model="form.place_of_exam_issuance" label="Place of examination" :options="examCenters" :error="errorOf('place_of_exam_issuance')" />
-                            </div>
-                            <label class="mt-5 flex cursor-pointer items-center gap-4 rounded-2xl border-2 bg-surface p-4 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-csc-blue-light/40" :class="differentName ? 'border-csc-blue' : 'border-border-strong/40'">
-                                <input v-model="differentName" type="checkbox" class="size-7 shrink-0 accent-csc-blue" />
-                                <span class="text-lg font-medium text-text">I used a different name when I took the examination</span>
-                            </label>
-                            <div v-if="differentName" class="mt-5 grid gap-5 sm:grid-cols-2">
-                                <KField v-model="form.used_lastname" label="Last name used" :error="errorOf('used_lastname')" />
-                                <KField v-model="form.used_firstname" label="First name used" :error="errorOf('used_firstname')" />
-                                <KField v-model="form.used_middlename" label="Middle name used" :error="errorOf('used_middlename')" />
-                                <KField v-model="form.used_extn" label="Extension used" :error="errorOf('used_extn')" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <h2 class="mb-1 text-xl font-semibold text-text">Attachments <span class="text-sm font-normal text-text-muted">optional</span></h2>
-                            <p class="mb-4 text-base text-text-muted">A photo or PDF of a valid ID or your certificate helps us process your request faster. Up to {{ maxMb }} MB each.</p>
-                            <div class="grid gap-4 sm:grid-cols-2">
-                                <div v-for="slot in [1, 2]" :key="slot">
-                                    <label class="flex min-h-24 cursor-pointer items-center gap-4 rounded-2xl border-2 border-dashed bg-surface p-4 transition hover:border-csc-blue-light hover:bg-info-bg/40 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-csc-blue-light/40" :class="form[`attachment_${slot}`] ? 'border-success' : 'border-border-strong/50'">
-                                        <span class="flex size-12 shrink-0 items-center justify-center rounded-xl" :class="form[`attachment_${slot}`] ? 'bg-success-bg text-success' : 'bg-surface-muted text-primary'"><KioskIcon :name="form[`attachment_${slot}`] ? 'check' : 'upload'" :size="24" /></span>
-                                        <span class="min-w-0">
-                                            <span class="block truncate text-base font-semibold text-text">{{ form[`attachment_${slot}`]?.name ?? `Attachment ${slot}` }}</span>
-                                            <span class="block text-sm text-text-muted">{{ form[`attachment_${slot}`] ? 'Tap to change' : 'PDF, JPG or PNG' }}</span>
-                                        </span>
-                                        <input type="file" class="sr-only" accept=".pdf,.jpg,.jpeg,.png" @change="setFile(slot, $event)" />
-                                    </label>
-                                    <p v-if="errorOf(`attachment_${slot}`)" class="mt-1.5 text-sm font-medium text-danger" role="alert" aria-invalid="true">{{ errorOf(`attachment_${slot}`) }}</p>
-                                </div>
-                            </div>
-                        </div>
                     </section>
 
                     <!-- Review -->

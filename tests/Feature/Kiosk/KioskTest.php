@@ -90,9 +90,10 @@ class KioskTest extends TestCase
     {
         return [
             'transaction_type' => 'Certification', 'privacy_acknowledged' => '1', 'website' => '',
-            'lname' => 'Lim', 'fname' => 'Ben', 'sex' => 'Male', 'current_address' => '12 Rizal St., Tacloban City',
+            'lname' => 'Lim', 'fname' => 'Ben', 'sex' => 'Male', 'mobile' => '09171234567', 'email' => 'ben@example.com', 'place_of_birth' => 'Tacloban City', 'company_name' => 'Acme', 'company_address' => 'Tacloban City', 'current_address' => '12 Rizal St., Tacloban City',
             'civil_status' => 'Single', 'date_of_birth' => '1990-05-04', 'purpose_of_request' => 'Employment', 'employment_status' => 'Employed',
             'eligibility' => 'Career Service Professional', 'date_of_exam_issuance' => '2015-03-15', 'place_of_exam_issuance' => 'Tacloban',
+            'used_lastname' => 'Lim', 'used_firstname' => 'Ben', 'used_middlename' => 'N/A', 'used_extn' => 'N/A',
             ...$extra,
         ];
     }
@@ -350,6 +351,21 @@ class KioskTest extends TestCase
         $this->device($token)->post('/kiosk/requests', $this->certInput(['place_of_exam_issuance' => 'Closed Center']))->assertSessionHasErrors('place_of_exam_issuance');
         $this->device($token)->post('/kiosk/requests', $this->certInput(['eligibility' => 'Made Up Title']))->assertSessionHasErrors('eligibility');
         $this->assertSame(0, Transaction::count());
+    }
+
+    public function test_a_certification_needs_its_eligibility_record_and_the_name_used(): void
+    {
+        [, $token] = $this->pairedTerminal(1);
+
+        $this->device($token)->post('/kiosk/requests', $this->certInput(['used_lastname' => '', 'used_firstname' => '', 'used_middlename' => '', 'used_extn' => '']))
+            ->assertSessionHasErrors(['used_lastname', 'used_firstname'])
+            ->assertSessionDoesntHaveErrors(['used_middlename', 'used_extn']);
+        $this->device($token)->post('/kiosk/requests', $this->certInput(['eligibility' => '', 'date_of_exam_issuance' => '', 'place_of_exam_issuance' => '']))
+            ->assertSessionHasErrors(['eligibility', 'date_of_exam_issuance', 'place_of_exam_issuance']);
+        $this->assertSame(0, Transaction::count());
+
+        // Special eligibility applications do not ask for it.
+        $this->device($token)->post('/kiosk/requests', $this->spelsInput())->assertSessionHasNoErrors();
     }
 
     public function test_a_certification_starts_submitted_with_its_issuance_details_and_attachments(): void
