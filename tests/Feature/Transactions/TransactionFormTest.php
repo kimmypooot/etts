@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Transactions;
 
+use App\Enums\AcquisitionCategory;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\AuditLog;
@@ -29,7 +30,7 @@ class TransactionFormTest extends TestCase
         Storage::fake('attachments');
         Office::create(['id' => 1, 'name' => 'Examination Services Division', 'code' => 'ESD']);
         Office::create(['id' => 2, 'name' => 'CSC Field Office - Samar', 'code' => 'FO-SAMAR']);
-        Eligibility::create(['code' => 'HGE', 'name' => 'Honor Graduate']);
+        Eligibility::create(['code' => 'HGE', 'name' => 'Honor Graduate', 'acquisition_category' => AcquisitionCategory::SpecialGrant]);
         $this->admin = User::factory()->admin()->create(['username' => 'esd.officer']);
     }
 

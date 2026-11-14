@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\TransactionType;
+use App\Services\Transactions\LookupLists;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -42,7 +43,7 @@ class KioskRequestRequest extends FormRequest
             'mobile' => ['nullable', 'string', 'max:12', 'regex:/^[0-9+\- ]*$/'],
             'email' => ['nullable', 'email', 'max:100'],
 
-            'elig_code' => $spels ? ['required', 'string', 'max:255', Rule::exists('eligibilities', 'code')] : ['nullable'],
+            'elig_code' => $spels ? ['required', 'string', 'max:255', LookupLists::spelsCodeRule()] : ['nullable'],
 
             'current_address' => [$issuance ? 'required' : 'nullable', 'string', 'max:500'],
             'civil_status' => ['nullable', Rule::in(['Single', 'Married', 'Widowed', 'Separated'])],
@@ -57,9 +58,9 @@ class KioskRequestRequest extends FormRequest
             'used_firstname' => ['nullable', 'string', 'max:255'],
             'used_middlename' => ['nullable', 'string', 'max:255'],
             'used_extn' => ['nullable', 'string', 'max:50'],
-            'eligibility' => ['nullable', 'string', 'max:255'],
+            'eligibility' => ['nullable', 'string', 'max:255', LookupLists::issuanceEligibilityRule()],
             'date_of_exam_issuance' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today', 'after:1900-01-01'],
-            'place_of_exam_issuance' => ['nullable', 'string', 'max:255'],
+            'place_of_exam_issuance' => ['nullable', 'string', 'max:255', LookupLists::examCenterRule()],
             'attachment_1' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:'.$maxKb],
             'attachment_2' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:'.$maxKb],
         ];
@@ -78,6 +79,8 @@ class KioskRequestRequest extends FormRequest
             'fname.required' => 'Please enter your first name.',
             'elig_code.required' => 'Please choose the eligibility you are applying for.',
             'elig_code.exists' => 'Please choose an eligibility from the list.',
+            'eligibility.in' => 'Please choose your eligibility from the list.',
+            'place_of_exam_issuance.in' => 'Please choose the place of examination from the list.',
             'current_address.required' => 'Please enter your current address.',
             'purpose_of_request.required' => 'Please tell us what the request is for.',
             'purpose_others.required_if' => 'Please tell us what the request is for.',

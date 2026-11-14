@@ -8,6 +8,7 @@ use App\Http\Middleware\KioskPaths;
 use App\Http\Requests\KioskRequestRequest;
 use App\Models\AuditLog;
 use App\Models\Eligibility;
+use App\Services\Transactions\LookupLists;
 use App\Services\Transactions\TransactionRecorder;
 use App\Services\Transactions\WorkflowException;
 use Illuminate\Http\RedirectResponse;
@@ -60,9 +61,12 @@ class RequestController extends Controller
             'slug' => $slug,
             'type' => $type->value,
             'spels' => $type->isSpels(),
+            // Special eligibility: special grants only. Certification and authentication: every title.
             'eligibilities' => $type->isSpels()
-                ? Eligibility::orderBy('name')->get(['code', 'name'])->map(fn (Eligibility $e) => ['code' => $e->code, 'name' => $e->name, 'featured' => in_array($e->code, ['HGE', 'BOE', 'MC 11'], true)])->all()
+                ? LookupLists::spelsEligibilities()->map(fn (Eligibility $e) => ['code' => $e->code, 'name' => $e->name, 'featured' => in_array($e->code, ['HGE', 'BOE', 'MC 11'], true)])->all()
                 : [],
+            'issuanceEligibilities' => $type->isSpels() ? [] : LookupLists::issuanceEligibilities(),
+            'examCenters' => $type->isSpels() ? [] : LookupLists::examCenters(),
             'purposes' => config('etts.purposes'),
             'maxMb' => (int) round(config('etts.attachments.max_kb') / 1024),
         ]);

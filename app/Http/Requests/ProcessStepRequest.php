@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Transactions\LookupLists;
 use App\Services\Transactions\ProcessSteps;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -24,6 +25,13 @@ class ProcessStepRequest extends FormRequest
         $step = (int) $this->route('step');
         $rules = ProcessSteps::rules($step, $this->input('purpose_of_request') === 'Others') + ['version' => ['nullable', 'string', 'max:19']];
 
+        if ($step === 2) {
+            // From the lists; the record's current value stays valid.
+            $issuance = $this->route('transaction')?->issuanceRequest;
+            $rules['eligibility'][] = LookupLists::issuanceEligibilityRule($issuance?->eligibility);
+            $rules['place_of_exam_issuance'][] = LookupLists::examCenterRule($issuance?->place_of_exam_issuance);
+        }
+
         if ($step === 4) {
             $maxKb = (int) config('etts.attachments.max_kb');
             $rules['attachment_1'] = ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:'.$maxKb];
@@ -42,6 +50,8 @@ class ProcessStepRequest extends FormRequest
             'official_receipt.regex' => 'The OR number may only contain letters, digits, spaces, hyphens, slashes and #.',
             'mobile.regex' => 'The mobile number may only contain digits, spaces, + and -.',
             'transaction_type.in' => 'Choose Certification, Authentication, or both.',
+            'eligibility.in' => 'Choose the eligibility from the list.',
+            'place_of_exam_issuance.in' => 'Choose the place of examination from the list.',
         ];
     }
 

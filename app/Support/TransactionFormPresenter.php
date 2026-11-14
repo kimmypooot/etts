@@ -6,6 +6,7 @@ use App\Enums\TransactionType;
 use App\Models\Eligibility;
 use App\Models\Office;
 use App\Models\Transaction;
+use App\Services\Transactions\LookupLists;
 
 /**
  * What the transaction form needs, shared by the ESD screens and the field
@@ -79,14 +80,14 @@ final class TransactionFormPresenter
                 $issuance->attachment_1 ? ['slot' => 1, 'url' => route($this->attachmentRoute, [$transaction->id, 1]), 'type' => pathinfo($issuance->attachment_1, PATHINFO_EXTENSION)] : null,
                 $issuance->attachment_2 ? ['slot' => 2, 'url' => route($this->attachmentRoute, [$transaction->id, 2]), 'type' => pathinfo($issuance->attachment_2, PATHINFO_EXTENSION)] : null,
             ])) : [],
-            'options' => $this->options(),
+            'options' => $this->options($transaction->elig_code, $issuance?->eligibility, $issuance?->place_of_exam_issuance),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function options(): array
+    private function options(?string $eligCode = null, ?string $eligibility = null, ?string $place = null): array
     {
         return [
             'types' => array_map(fn (TransactionType $type) => ['value' => $type->value, 'label' => $type->value], TransactionType::cases()),
@@ -94,7 +95,11 @@ final class TransactionFormPresenter
                 ->when($this->lockedOfficeId, fn ($query, $id) => $query->whereKey($id))
                 ->orderBy('name')->get(['id', 'code', 'name'])
                 ->map(fn (Office $office) => ['value' => $office->id, 'label' => "{$office->code} — {$office->name}"])->all(),
-            'eligibilities' => Eligibility::orderBy('code')->get(['code', 'name'])->map(fn (Eligibility $eligibility) => ['value' => $eligibility->code, 'label' => "{$eligibility->code} — {$eligibility->name}"])->all(),
+            // Special eligibility: special grants only (and the record's own code).
+            'eligibilities' => LookupLists::spelsEligibilities($eligCode)->map(fn (Eligibility $eligibility) => ['value' => $eligibility->code, 'label' => "{$eligibility->code} — {$eligibility->name}"])->all(),
+            // Certification and authentication: every title, and the places switched on.
+            'issuanceEligibilities' => LookupLists::asOptions(LookupLists::issuanceEligibilities($eligibility)),
+            'examCenters' => LookupLists::asOptions(LookupLists::examCenters($place)),
             'purposes' => config('etts.purposes'),
             'prices' => config('etts.prices'),
             'maxKb' => config('etts.attachments.max_kb'),

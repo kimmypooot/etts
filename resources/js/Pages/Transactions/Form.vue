@@ -110,6 +110,9 @@ const purposeOptions = computed(() => [
     { value: 'Others', label: 'Others' },
 ]);
 const eligibilityOptions = computed(() => [{ value: '', label: 'Choose an eligibility…' }, ...props.options.eligibilities]);
+// Certification and authentication: the titles and places from Settings.
+const issuanceEligibilityOptions = computed(() => [{ value: '', label: '—' }, ...props.options.issuanceEligibilities]);
+const examCenterOptions = computed(() => [{ value: '', label: '—' }, ...props.options.examCenters]);
 
 const submit = () => {
     const options = { preserveScroll: true, forceFormData: true };
@@ -234,9 +237,13 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
 
                 <h3 class="mt-6 mb-3 text-sm font-semibold text-text">Eligibility record</h3>
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Field id="eligibility" v-model="form.eligibility" label="Eligibility" :error="form.errors.eligibility" class="lg:col-span-2" />
+                    <FormGroup id="eligibility" label="Eligibility" :error="form.errors.eligibility" class="lg:col-span-2">
+                        <Select id="eligibility" v-model="form.eligibility" :options="issuanceEligibilityOptions" :invalid="!!form.errors.eligibility" />
+                    </FormGroup>
                     <Field id="date_of_exam_issuance" v-model="form.date_of_exam_issuance" type="date" label="Date of exam / issuance" :error="form.errors.date_of_exam_issuance" />
-                    <Field id="place_of_exam_issuance" v-model="form.place_of_exam_issuance" label="Place of exam / issuance" :error="form.errors.place_of_exam_issuance" />
+                    <FormGroup id="place_of_exam_issuance" label="Place of exam / issuance" :error="form.errors.place_of_exam_issuance">
+                        <Select id="place_of_exam_issuance" v-model="form.place_of_exam_issuance" :options="examCenterOptions" :invalid="!!form.errors.place_of_exam_issuance" />
+                    </FormGroup>
                     <Field id="book" v-model="form.book" label="Book" :error="form.errors.book" />
                     <Field id="page" v-model="form.page" label="Page" :error="form.errors.page" />
                     <Field id="sequence" v-model="form.sequence" label="Sequence" :error="form.errors.sequence" />

@@ -4,6 +4,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import KioskLayout from '@/Layouts/KioskLayout.vue';
 import KButton from '@/Components/Kiosk/KButton.vue';
 import KField from '@/Components/Kiosk/KField.vue';
+import KSelect from '@/Components/Kiosk/KSelect.vue';
 import KChoice from '@/Components/Kiosk/KChoice.vue';
 import KStepper from '@/Components/Kiosk/KStepper.vue';
 import KioskIcon from '@/Components/Kiosk/KioskIcon.vue';
@@ -19,6 +20,9 @@ const props = defineProps({
     type: { type: String, required: true },
     spels: { type: Boolean, required: true },
     eligibilities: { type: Array, required: true },
+    // Certification and authentication: the titles and places from Settings.
+    issuanceEligibilities: { type: Array, default: () => [] },
+    examCenters: { type: Array, default: () => [] },
     purposes: { type: Array, required: true },
     maxMb: { type: Number, default: 5 },
 });
@@ -287,9 +291,9 @@ const review = computed(() => {
                         <div class="rounded-2xl bg-surface-muted/70 p-5 sm:p-6">
                             <h2 class="mb-4 text-xl font-semibold text-text">Your eligibility record</h2>
                             <div class="grid gap-5 sm:grid-cols-2">
-                                <KField v-model="form.eligibility" label="Eligibility" hint="For example Career Service Professional" class="sm:col-span-2" :error="errorOf('eligibility')" />
+                                <KSelect v-model="form.eligibility" label="Eligibility" :options="issuanceEligibilities" class="sm:col-span-2" :error="errorOf('eligibility')" />
                                 <KField v-model="form.date_of_exam_issuance" label="Date of examination or grant" type="date" :max="today" :error="errorOf('date_of_exam_issuance')" />
-                                <KField v-model="form.place_of_exam_issuance" label="Place of examination" :error="errorOf('place_of_exam_issuance')" />
+                                <KSelect v-model="form.place_of_exam_issuance" label="Place of examination" :options="examCenters" :error="errorOf('place_of_exam_issuance')" />
                             </div>
                             <label class="mt-5 flex cursor-pointer items-center gap-4 rounded-2xl border-2 bg-surface p-4 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-csc-blue-light/40" :class="differentName ? 'border-csc-blue' : 'border-border-strong/40'">
                                 <input v-model="differentName" type="checkbox" class="size-7 shrink-0 accent-csc-blue" />

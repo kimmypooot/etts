@@ -5,6 +5,8 @@ namespace Tests\Feature\Transactions;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\AuditLog;
+use App\Models\Eligibility;
+use App\Models\ExamCenter;
 use App\Models\IssuanceRequest;
 use App\Models\Office;
 use App\Models\Transaction;
@@ -30,6 +32,11 @@ class TransactionProcessTest extends TestCase
         Office::create(['id' => 1, 'name' => 'Examination Services Division', 'code' => 'ESD']);
         Office::create(['id' => 2, 'name' => 'CSC Field Office - Samar', 'code' => 'FO-SAMAR']);
         $this->admin = User::factory()->admin()->create(['username' => 'esd.officer']);
+        // The step 2 pick lists.
+        foreach (['CSE-PR', 'CHANGED', 'OTHER'] as $i => $name) {
+            Eligibility::create(['code' => 'E'.$i, 'name' => $name]);
+        }
+        ExamCenter::create(['name' => 'Tacloban']);
     }
 
     /** Issuance fields for steps 1–3, all filled. */

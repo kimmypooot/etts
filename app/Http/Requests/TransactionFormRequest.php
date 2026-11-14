@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Enums\TransactionType;
+use App\Models\Transaction;
+use App\Services\Transactions\LookupLists;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -27,6 +29,10 @@ class TransactionFormRequest extends FormRequest
         $type = TransactionType::tryFrom((string) $this->input('transaction_type'));
         $spels = $type?->isSpels() ?? false;
         $maxKb = config('etts.attachments.max_kb');
+        // On edit, the record's current values stay valid even if the lists changed.
+        $current = $this->route('transaction');
+        $current = $current instanceof Transaction ? $current : null;
+        $issuance = $current?->issuanceRequest;
 
         return [
             'transaction_type' => ['required', Rule::enum(TransactionType::class)],
@@ -39,7 +45,7 @@ class TransactionFormRequest extends FormRequest
             'mobile' => ['nullable', 'string', 'max:12', 'regex:/^[0-9+\- ]*$/'],
             'email' => ['nullable', 'email', 'max:100'],
             'transaction_date' => ['required', 'date_format:Y-m-d'],
-            'elig_code' => $spels ? ['required', 'string', 'max:255', Rule::exists('eligibilities', 'code')] : ['nullable', 'string', 'max:255'],
+            'elig_code' => $spels ? ['required', 'string', 'max:255', LookupLists::spelsCodeRule($current?->elig_code)] : ['nullable', 'string', 'max:255'],
             'official_receipt' => ['nullable', 'string', 'max:50', 'regex:/^[\w\-\/# ]*$/u'],
             'or_date' => ['nullable', 'date_format:Y-m-d'],
             'amount' => ['nullable', 'integer', 'min:0', 'max:1000000'],
@@ -63,9 +69,9 @@ class TransactionFormRequest extends FormRequest
             'used_middlename' => ['nullable', 'string', 'max:255'],
             'used_extn' => ['nullable', 'string', 'max:50'],
             'used_address' => ['nullable', 'string', 'max:500'],
-            'eligibility' => ['nullable', 'string', 'max:255'],
+            'eligibility' => ['nullable', 'string', 'max:255', LookupLists::issuanceEligibilityRule($issuance?->eligibility)],
             'date_of_exam_issuance' => ['nullable', 'date_format:Y-m-d'],
-            'place_of_exam_issuance' => ['nullable', 'string', 'max:255'],
+            'place_of_exam_issuance' => ['nullable', 'string', 'max:255', LookupLists::examCenterRule($issuance?->place_of_exam_issuance)],
             'book' => ['nullable', 'string', 'max:25'],
             'page' => ['nullable', 'string', 'max:5'],
             'sequence' => ['nullable', 'string', 'max:5'],
@@ -101,7 +107,9 @@ class TransactionFormRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'elig_code.exists' => 'Choose an eligibility from the list.',
+            'elig_code.exists' => 'Choose a special eligibility from the list.',
+            'eligibility.in' => 'Choose the eligibility from the list.',
+            'place_of_exam_issuance.in' => 'Choose the place of examination from the list.',
             'official_receipt.regex' => 'The OR number may only contain letters, digits, spaces, hyphens, slashes and #.',
             'mobile.regex' => 'The mobile number may only contain digits, spaces, + and -.',
         ];

@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Kiosk;
 
+use App\Enums\AcquisitionCategory;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Http\Middleware\ResolveKioskTerminal;
 use App\Models\AuditLog;
 use App\Models\Eligibility;
+use App\Models\ExamCenter;
 use App\Models\IssuanceRequest;
 use App\Models\KioskPairingCode;
 use App\Models\KioskTerminal;
@@ -40,8 +42,11 @@ class KioskTest extends TestCase
         Office::create(['id' => 2, 'name' => 'CSC Field Office - Samar', 'code' => 'FO-SAMAR']);
         Office::create(['id' => 10, 'name' => 'Public Assistance and Liaison Division', 'code' => 'PALD']);
         foreach ([['HGE', 'Honor Graduate'], ['BOE', 'Barangay Official'], ['MC 11', 'Skills Eligibility'], ['BHW', 'Barangay Health Worker']] as [$code, $name]) {
-            Eligibility::create(['code' => $code, 'name' => $name]);
+            Eligibility::create(['code' => $code, 'name' => $name, 'acquisition_category' => AcquisitionCategory::SpecialGrant]);
         }
+        // Not a special grant: offered for certifications only.
+        Eligibility::create(['code' => 'CS-PROF', 'name' => 'Career Service Professional', 'acquisition_category' => AcquisitionCategory::Exam]);
+        ExamCenter::create(['name' => 'Tacloban']);
 
         $this->pairing = app(KioskPairing::class);
         $this->admin = User::factory()->admin()->create(['username' => 'esd.officer']);
@@ -326,6 +331,25 @@ class KioskTest extends TestCase
         $this->assertSame(TransactionStatus::Submitted, $record->transaction_status);
         $this->assertNull($record->amount);
         $this->assertNull($record->remarks);
+    }
+
+    public function test_the_lists_come_from_the_settings_and_special_eligibility_offers_special_grants_only(): void
+    {
+        [, $token] = $this->pairedTerminal(1);
+        ExamCenter::create(['name' => 'Closed Center', 'is_active' => false]);
+
+        $this->device($token)->get('/kiosk/request/special-eligibility')
+            ->assertInertia(fn (Assert $page) => $page->where('eligibilities', fn ($rows) => ! collect($rows)->contains('code', 'CS-PROF')));
+
+        $this->device($token)->get('/kiosk/request/certification')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('examCenters', ['Tacloban'])
+                ->where('issuanceEligibilities', fn ($titles) => collect($titles)->contains('Career Service Professional') && collect($titles)->contains('Honor Graduate')));
+
+        $this->device($token)->post('/kiosk/requests', $this->spelsInput(['elig_code' => 'CS-PROF']))->assertSessionHasErrors('elig_code');
+        $this->device($token)->post('/kiosk/requests', $this->certInput(['place_of_exam_issuance' => 'Closed Center']))->assertSessionHasErrors('place_of_exam_issuance');
+        $this->device($token)->post('/kiosk/requests', $this->certInput(['eligibility' => 'Made Up Title']))->assertSessionHasErrors('eligibility');
+        $this->assertSame(0, Transaction::count());
     }
 
     public function test_a_certification_starts_submitted_with_its_issuance_details_and_attachments(): void

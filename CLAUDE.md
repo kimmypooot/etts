@@ -62,7 +62,7 @@ Artisan commands (`app/Console/Commands`), all about the legacy migration:
 
 - **Thin controllers, logic in `app/Services/*`**: `Transactions`
   (`TransactionRecorder`, `TransactionWorkflow`, `TransactionArchiver`,
-  `AttachmentStore`, `BoardFilters`, `ProcessSteps`, `VcasLink`),
+  `AttachmentStore`, `BoardFilters`, `ProcessSteps`, `VcasLink`, `LookupLists`),
   `Transmittals`, `Spels` (duplicate
   check vs duplicate audit are deliberately separate classes), `Reports`,
   `Kiosk`, `Imis` (people directory), `Legacy` (import and sync).
@@ -79,9 +79,15 @@ Artisan commands (`app/Console/Commands`), all about the legacy migration:
   record can still be edited. The controller, the form request and the page
   all use it. `VcasLink` builds the `vcas://` launcher URL from the saved
   record, encoding each value on its own.
+- **Pick lists**: `LookupLists` gives the forms (kiosk, ESD, FO, processing
+  page) their eligibility and place of examination choices from the Settings
+  tables (`eligibilities`, `exam_centers`) and the matching validation rules.
+  SPELS offers only `AcquisitionCategory::SpecialGrant` eligibilities. A
+  record's current value always stays a valid choice. Seed the lists with
+  `php artisan db:seed`.
 - **Enums** (`app/Enums`): `TransactionStatus`, `TransactionType`,
   `TransmittalStatus`, `TransmittalDirection` (`ESD_TO_FO`, `FO_TO_RO`),
-  `DeletionReason`, `UserRole`.
+  `DeletionReason`, `UserRole`, `AcquisitionCategory`, `PositionLevel`.
 - **Kiosk is a separate public surface**: `routes/kiosk.php` with its own
   `kiosk` middleware group, session cookie, CSRF and policy. `bootstrap/app.php`
   serves it on `ETTS_KIOSK_DOMAINS` hosts when set, otherwise under `/kiosk`

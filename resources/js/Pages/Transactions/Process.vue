@@ -144,7 +144,7 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
                 </div>
 
                 <PersonalStep v-if="current === 1" :form="form" :options="options" :readonly="locked" />
-                <EligibilityStep v-else-if="current === 2" :form="form" :readonly="locked" />
+                <EligibilityStep v-else-if="current === 2" :form="form" :options="options" :readonly="locked" />
                 <VerificationStep v-else-if="current === 3" :form="form" :readonly="locked" />
                 <PaymentStep v-else-if="current === 4" :form="form" :options="options" :attachments="attachments" :readonly="locked" />
                 <FinishStep

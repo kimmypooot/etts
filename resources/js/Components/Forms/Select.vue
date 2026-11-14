@@ -37,7 +37,7 @@ defineEmits(['update:modelValue']);
 <template>
     <select
         :id="id"
-        :value="modelValue"
+        :value="modelValue ?? ''"
         :required="required"
         :aria-invalid="invalid"
         :disabled="disabled"
