@@ -8,6 +8,7 @@ use App\Enums\TransactionType;
 use App\Models\Office;
 use App\Models\Transaction;
 use App\Services\Transactions\BoardFilters;
+use App\Services\Transactions\TransactionActions;
 use App\Services\Transactions\TransactionWorkflow;
 use App\Support\TransactionFormPresenter;
 use Illuminate\Http\Request;
@@ -25,9 +26,10 @@ class TransactionController extends Controller
 {
     private const PER_PAGE = 25;
 
-    public function index(Request $request, TransactionWorkflow $workflow): Response
+    public function index(Request $request, TransactionActions $actions): Response
     {
         $filters = BoardFilters::fromRequest($request, defaultToEsd: true);
+        $user = $request->user();
 
         $transactions = BoardFilters::sorted(BoardFilters::query($filters)->with('office:id,name,code'), $filters)
             ->paginate(self::PER_PAGE)
@@ -47,7 +49,8 @@ class TransactionController extends Controller
                 'transaction_details' => $transaction->transaction_details,
                 'remarks' => $transaction->remarks,
                 'action_officer' => $transaction->action_officer,
-                'actions' => $workflow->availableActions($transaction),
+                // The row's buttons, by office, type and status (TransactionActions).
+                'actions' => $actions->for($transaction, $user),
                 // A final record opens read-only: the row offers View details instead of Edit.
                 'locked' => TransactionFormPresenter::isLocked($transaction),
             ]);

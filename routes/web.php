@@ -79,8 +79,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/transactions/delete', [Fo\TransactionController::class, 'destroy'])->can('office', Transaction::class)->name('transactions.delete');
         Route::get('/transactions/{id}/timeline', Fo\TimelineController::class)->whereNumber('id')->can('office', Transaction::class)->name('transactions.timeline');
         Route::get('/transactions/{transaction}', [Fo\TransactionController::class, 'show'])->whereNumber('transaction')->can('viewAsOffice', 'transaction')->name('transactions.show');
-        Route::get('/transactions/{transaction}/edit', [Fo\TransactionController::class, 'edit'])->can('workAsOffice', 'transaction')->name('transactions.edit');
-        Route::put('/transactions/{transaction}', [Fo\TransactionController::class, 'update'])->can('workAsOffice', 'transaction')->name('transactions.update');
+        // Receive a SPELS application: its form, payment first.
+        Route::get('/transactions/{transaction}/edit', [Fo\TransactionController::class, 'edit'])->can('editAsOffice', 'transaction')->name('transactions.edit');
+        Route::put('/transactions/{transaction}', [Fo\TransactionController::class, 'update'])->can('editAsOffice', 'transaction')->name('transactions.update');
+        // Receive a certification or authentication: the processing page, attachments only.
+        Route::get('/transactions/{transaction}/process', [Fo\TransactionController::class, 'process'])->can('receiveAsOffice', 'transaction')->name('transactions.process');
+        Route::post('/transactions/{transaction}/process/{step}', [Fo\TransactionController::class, 'saveAttachments'])->where('step', '4')->can('receiveAsOffice', 'transaction')->name('transactions.process.save');
+        Route::post('/transactions/{transaction}/return', [Fo\TransactionController::class, 'returnApplication'])->can('returnAsOffice', 'transaction')->name('transactions.return');
         Route::post('/transactions/{transaction}/forward', [Fo\TransactionController::class, 'forward'])->can('workAsOffice', 'transaction')->name('transactions.forward');
         Route::post('/transactions/{transaction}/cancel', [Fo\TransactionController::class, 'cancel'])->can('cancelAsOffice', 'transaction')->name('transactions.cancel');
         Route::get('/transactions/{transaction}/attachments/{slot}', [Fo\TransactionController::class, 'attachment'])->whereNumber('slot')->can('view', 'transaction')->name('attachments.show');

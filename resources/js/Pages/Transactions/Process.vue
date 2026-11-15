@@ -33,11 +33,15 @@ const props = defineProps({
     finish: { type: String, default: null },
     finishStatus: { type: String, default: null },
     vcasUrl: { type: String, default: null },
-    // The field office's View Details: steps 1 to 4, read-only, no printing or finishing.
-    viewOnly: { type: Boolean, default: false },
+    // 'process' (ESD), 'view' (field office View Details: steps 1 to 4, read-only)
+    // or 'attachments' (field office Receive: as 'view', but the files can be saved).
+    mode: { type: String, default: 'process' },
 });
 
 const last = computed(() => props.steps.length);
+const uploadOnly = computed(() => props.mode === 'attachments');
+// What a save can change: the step's fields, or (Receive at an office) only the files.
+const editable = computed(() => !props.locked || uploadOnly.value);
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
@@ -76,7 +80,7 @@ const currentStep = computed(() => props.steps[current.value - 1]);
 const pending = ref(null);
 const go = (step) => {
     if (step === current.value || step > reachable.value) return;
-    if (form.isDirty && !props.locked) {
+    if (form.isDirty && editable.value) {
         pending.value = step;
         return;
     }
@@ -91,7 +95,7 @@ const discard = () => {
 };
 
 const save = () => {
-    if (props.locked) return;
+    if (!editable.value) return;
 
     form.post(`${props.base}/${props.id}/process/${current.value}`, {
         preserveScroll: true,
@@ -113,7 +117,7 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
 </script>
 
 <template>
-    <Head :title="viewOnly ? `Transaction #${id}` : `Process #${id}`" />
+    <Head :title="mode === 'view' ? `Transaction #${id}` : `Process #${id}`" />
 
     <StaffLayout>
         <PageHeader
@@ -136,7 +140,10 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
             </span>
         </div>
 
-        <Alert v-if="viewOnly" tone="info" class="mb-6">This record is {{ status.toLowerCase() }}. You can view it but not change it.</Alert>
+        <Alert v-if="mode === 'view'" tone="info" class="mb-6">This record is {{ status.toLowerCase() }}. You can view it but not change it.</Alert>
+        <Alert v-else-if="uploadOnly" tone="info" class="mb-6">
+            Receive the client's documents: add or replace the attachments under Payment &amp; files. The other details are processed at ESD.
+        </Alert>
         <Alert v-else-if="locked" tone="info" class="mb-6">
             This record is {{ status.toLowerCase() }}, so its details are locked. To correct them, revert it on the transactions board first.
         </Alert>
@@ -153,7 +160,7 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
                 <PersonalStep v-if="current === 1" :form="form" :options="options" :readonly="locked" />
                 <EligibilityStep v-else-if="current === 2" :form="form" :options="options" :readonly="locked" />
                 <VerificationStep v-else-if="current === 3" :form="form" :readonly="locked" />
-                <PaymentStep v-else-if="current === 4" :form="form" :options="options" :attachments="attachments" :readonly="locked" />
+                <PaymentStep v-else-if="current === 4" :form="form" :options="options" :attachments="attachments" :readonly="locked" :files-open="uploadOnly" />
                 <FinishStep
                     v-else
                     :id="id"
@@ -170,7 +177,10 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
                     <Button v-if="current > 1" type="button" variant="secondary" @click="go(current - 1)"><Icon name="chevronLeft" size="sm" />Back</Button>
                     <Button v-else type="button" variant="secondary" :href="base">Back to transactions</Button>
 
-                    <Button v-if="current < last && !locked" type="submit" :loading="form.processing">
+                    <Button v-if="uploadOnly && current === 4" type="submit" :loading="form.processing" :disabled="!form.attachment_1 && !form.attachment_2">
+                        <Icon name="upload" size="sm" />Save attachments
+                    </Button>
+                    <Button v-else-if="current < last && !locked" type="submit" :loading="form.processing">
                         Save and continue<Icon name="chevronRight" size="sm" />
                     </Button>
                     <Button v-else-if="current < last" type="button" @click="go(current + 1)">Next<Icon name="chevronRight" size="sm" /></Button>

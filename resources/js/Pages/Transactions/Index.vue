@@ -23,6 +23,8 @@ import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusB
 import TransactionTypeBadge from '@/Components/Transactions/TransactionTypeBadge.vue';
 import StatusChips from '@/Components/Transactions/StatusChips.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
+import RowActions from '@/Components/Transactions/RowActions.vue';
+import ActionDialog from '@/Components/Transactions/ActionDialog.vue';
 import { useAuthorization } from '@/Composables/useAuthorization';
 import { alert, confirm } from '@/Composables/useDialog';
 import { formatDate } from '@/Utils/format.js';
@@ -101,7 +103,6 @@ const officeOptions = [{ value: 'all', label: 'All offices' }, ...props.options.
 // ─── Table layout ─────────────────────────────────────────────────────────
 // With one office chosen every row says the same office, so the column is only for "All offices".
 const showOffice = computed(() => props.filters.office == null);
-const showNextStep = computed(() => can('transactions.process'));
 
 // The footer names the office so the default (ESD) is never a surprise.
 const footerSummary = computed(() => {
@@ -112,14 +113,6 @@ const footerSummary = computed(() => {
         ? `0 transactions · ${office}`
         : `Showing ${page.from.toLocaleString('en-PH')}–${page.to.toLocaleString('en-PH')} of ${page.total.toLocaleString('en-PH')} transactions · ${office}`;
 });
-
-// One main action per row stands out; the cautious ones (disapprove, return, cancel) sit beside it as outlines.
-const CAUTIOUS = ['Cancelled', 'Disapproved', 'Returned'];
-const actionVariant = (row, action) => {
-    if (CAUTIOUS.includes(action.status)) return 'outline';
-
-    return row.actions.find((a) => !CAUTIOUS.includes(a.status)) === action ? 'primary' : 'secondary';
-};
 
 // ─── Selection and batch ──────────────────────────────────────────────────
 const selected = ref([]);
@@ -154,37 +147,16 @@ const applyBatch = async () => {
     }
 };
 
-// ─── One record: forward / receive / status ───────────────────────────────
-const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-
+// ─── One record: the row's actions (TransactionActions on the server) ────
 const acting = ref(null); // { row, action }
-const actionForm = useForm({ date: today(), remarks: '', status: '' });
-
-const openAction = (row, action) => {
-    acting.value = { row, action };
-    actionForm.defaults({ date: today(), remarks: '', status: action.status ?? '' });
-    actionForm.reset();
-    actionForm.clearErrors();
-};
-
-const actionHint = (action) =>
-    ({ forward: 'Send this record to the Regional Office', receive: 'Record that the Regional Office received it' })[action.kind] ?? `Set the status to ${action.status}`;
-
-const submitAction = () => {
+const openAction = (row, action) => (acting.value = { row, action });
+const actionDone = (id) => {
     const { row, action } = acting.value;
-    const url = { forward: 'forward', receive: 'receive', status: 'status' }[action.kind];
-    const payload = action.kind === 'status' ? { status: action.status, date: actionForm.date, remarks: actionForm.remarks } : { date: actionForm.date };
-
-    actionForm.transform(() => payload).post(`/admin/transactions/${row.id}/${url}`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            flash(row.id);
-            acting.value = null;
-            if (action.status === 'Cancelled') {
-                alert({ title: 'Transaction cancelled', text: `#${row.id} · ${personName(row.name)} has been cancelled.`, icon: 'success' });
-            }
-        },
-    });
+    flash(id);
+    acting.value = null;
+    if (action.status === 'Cancelled') {
+        alert({ title: 'Transaction cancelled', text: `#${row.id} · ${personName(row.name)} has been cancelled.`, icon: 'success' });
+    }
 };
 
 // ─── One record: history, revert, delete ──────────────────────────────────
@@ -341,8 +313,7 @@ const inputClass =
                     <th scope="col" :aria-sort="ariaSort('date')"><button type="button" class="font-semibold hover:underline" @click="sortBy('date')">Filed</button></th>
                     <th scope="col" :aria-sort="ariaSort('status')"><button type="button" class="font-semibold hover:underline" @click="sortBy('status')">Status</button></th>
                     <th scope="col"><abbr title="Action officer" class="no-underline">AO</abbr></th>
-                    <th v-if="showNextStep" scope="col">Next step</th>
-                    <th scope="col" class="sticky right-0 w-24 bg-inherit"><span class="sr-only">Edit and history</span></th>
+                    <th scope="col" class="sticky right-0 bg-inherit text-right">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -373,37 +344,8 @@ const inputClass =
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
                     <td class="whitespace-nowrap text-sm">{{ row.action_officer || '—' }}</td>
-                    <td v-if="showNextStep" class="min-w-60">
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            <Button
-                                v-for="action in row.actions"
-                                :key="action.kind + action.status"
-                                :variant="actionVariant(row, action)"
-                                size="sm"
-                                :title="actionHint(action)"
-                                @click="openAction(row, action)"
-                            >
-                                {{ action.label }}
-                            </Button>
-                        </div>
-                    </td>
-                    <td class="sticky right-0 w-24 bg-surface text-right whitespace-nowrap">
-                        <div class="flex items-center justify-end">
-                            <Button
-                                v-if="can('transactions.manage')"
-                                variant="ghost"
-                                size="sm"
-                                :href="`/admin/transactions/${row.id}/${row.type === 'Special Eligibility Application' ? 'edit' : 'process'}`"
-                                :aria-label="`${row.locked ? 'View details of' : 'Edit'} transaction ${row.id}`"
-                                :title="row.locked ? 'View details' : 'Edit'"
-                                icon-only
-                            >
-                                <Icon :name="row.locked ? 'eye' : 'pencil'" size="sm" />
-                            </Button>
-                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
-                                <Icon name="clock" size="sm" />
-                            </Button>
-                        </div>
+                    <td class="sticky right-0 min-w-56 bg-surface">
+                        <RowActions :row="row" @act="openAction" @history="viewing = $event" />
                     </td>
                 </tr>
             </tbody>
@@ -437,26 +379,8 @@ const inputClass =
             <Button variant="ghost" size="sm" title="Unselect all transactions" @click="selected = []">Clear selection</Button>
         </div>
 
-        <!-- Forward / receive / change status -->
-        <Modal :open="acting !== null" :title="acting?.action.label ?? ''" tone="primary" icon="check" @close="acting = null">
-            <form v-if="acting" id="action-form" class="space-y-4" @submit.prevent="submitAction">
-                <p class="text-sm text-text-muted">
-                    #{{ acting.row.id }} · {{ personName(acting.row.name) }} · <TransactionStatusBadge :status="acting.row.status" />
-                </p>
-                <TextInput id="action-date" v-model="actionForm.date" type="date" label="Date" required :invalid="!!actionForm.errors.date" />
-                <p v-if="actionForm.errors.date" class="text-sm text-danger">{{ actionForm.errors.date }}</p>
-                <FormGroup v-if="acting.action.kind === 'status'" id="action-remarks" :label="acting.action.needs_remarks ? 'Reason / remarks' : 'Remarks (optional)'" :required="acting.action.needs_remarks" :error="actionForm.errors.remarks">
-                    <textarea id="action-remarks" v-model="actionForm.remarks" rows="3" maxlength="1000" :required="acting.action.needs_remarks" :class="inputClass" />
-                </FormGroup>
-                <Alert v-if="acting.action.status === 'Approved' || acting.action.status === 'Approved/Released'" tone="info">
-                    An applicant may hold only one approved record per eligibility. If one is already on file, this will be refused.
-                </Alert>
-            </form>
-            <template #footer>
-                <Button variant="secondary" @click="acting = null">Go back</Button>
-                <Button type="submit" form="action-form" :loading="actionForm.processing">{{ acting?.action.label }}</Button>
-            </template>
-        </Modal>
+        <!-- Forward, a status change or revert, from the row -->
+        <ActionDialog :acting="acting" @close="acting = null" @done="actionDone" />
 
         <!-- History, with revert and delete for the record -->
         <TimelineModal :record="viewing" @close="viewing = null">

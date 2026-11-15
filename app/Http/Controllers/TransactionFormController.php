@@ -7,10 +7,12 @@ use App\Http\Requests\TransactionFormRequest;
 use App\Models\Office;
 use App\Models\Transaction;
 use App\Services\Transactions\TransactionRecorder;
+use App\Services\Transactions\TransactionWorkflow;
 use App\Services\Transactions\WorkflowException;
 use App\Support\TransactionFormPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,7 +24,7 @@ use Inertia\Response;
  */
 class TransactionFormController extends Controller
 {
-    public function __construct(private TransactionRecorder $recorder) {}
+    public function __construct(private TransactionRecorder $recorder, private TransactionWorkflow $workflow) {}
 
     private function presenter(): TransactionFormPresenter
     {
@@ -60,7 +62,13 @@ class TransactionFormController extends Controller
             return redirect()->route('transactions.process', $transaction);
         }
 
-        return Inertia::render('Transactions/Form', $this->presenter()->edit($transaction));
+        $form = $this->presenter()->edit($transaction);
+
+        return Inertia::render('Transactions/Form', [
+            ...$form,
+            // Receive: a SPELS application waiting for ESD can be saved and received in one go, once paid.
+            'receiveOnSave' => ! $form['readOnly'] && $this->workflow->awaitsReceipt($transaction->loadMissing('office')),
+        ]);
     }
 
     public function update(TransactionFormRequest $request, Transaction $transaction): RedirectResponse
@@ -69,20 +77,34 @@ class TransactionFormController extends Controller
             return $this->refuse(new WorkflowException("This record is {$transaction->transaction_status->value} and can no longer be edited. Revert it first to correct it."));
         }
 
+        // "Save and receive": the client must have paid before the application can proceed.
+        $receive = $request->boolean('receive');
+
+        if ($receive && blank($request->input('official_receipt'))) {
+            return back()->withInput()->withErrors(['official_receipt' => 'Enter the OR number to receive this application: the client pays first.']);
+        }
+
         try {
-            $this->recorder->update(
-                $transaction,
-                $request->safe()->except(['attachment_1', 'attachment_2', 'version']),
-                $request->user(),
-                $request->input('version'),
-                $request->file('attachment_1'),
-                $request->file('attachment_2'),
-            );
+            DB::transaction(function () use ($request, $transaction, $receive) {
+                $saved = $this->recorder->update(
+                    $transaction,
+                    $request->safe()->except(['attachment_1', 'attachment_2', 'version']),
+                    $request->user(),
+                    $request->input('version'),
+                    $request->file('attachment_1'),
+                    $request->file('attachment_2'),
+                );
+
+                // A walk-in filed at ESD is received by the save itself; a forwarded one is received here.
+                if ($receive && $this->workflow->awaitsReceipt($saved->loadMissing('office'))) {
+                    $this->workflow->receive($saved, today()->toDateString(), $request->user());
+                }
+            });
         } catch (WorkflowException $e) {
             return $this->refuse($e);
         }
 
-        return redirect()->route('transactions.index')->with('status', "Transaction #{$transaction->id} saved.");
+        return redirect()->route('transactions.index')->with('status', $receive ? "Transaction #{$transaction->id} saved and received." : "Transaction #{$transaction->id} saved.");
     }
 
     public function quick(Request $request, Transaction $transaction): RedirectResponse

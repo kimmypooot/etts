@@ -14,9 +14,9 @@ use App\Models\Office;
 use App\Models\Transaction;
 use App\Models\Transmittal;
 use App\Models\User;
-use App\Services\Transactions\TransactionWorkflow;
 use App\Services\Transmittals\TransmittalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -197,14 +197,16 @@ class FieldOfficePortalTest extends TestCase
         // A returned application sits on the History board, the rest on Active.
         $rows = collect([...$this->props('/fo/transactions')['transactions']['data'], ...$this->props('/fo/transactions?board=history')['transactions']['data']])->keyBy('id');
 
-        $this->assertTrue($rows[$submitted->id]['can_work'] && $rows[$submitted->id]['can_forward']);
-        $this->assertFalse($rows[$submitted->id]['can_view']);
+        $keys = fn (Transaction $record) => array_column($rows[$record->id]['actions'], 'key');
+
+        $this->assertTrue($rows[$submitted->id]['can_work']);
+        $this->assertSame(['forward', 'history'], $keys($submitted));
 
         // Everything past Submitted is out of the office's hands: View Details only.
         foreach ([$returned, $forwarded, $cert, $completedCert] as $record) {
             $this->assertFalse($rows[$record->id]['can_work'], "#{$record->id} {$record->transaction_status->value}");
-            $this->assertFalse($rows[$record->id]['can_forward']);
-            $this->assertTrue($rows[$record->id]['can_view']);
+            $this->assertSame(['view', 'history'], $keys($record));
+            $this->assertSame("/fo/transactions/{$record->id}", $rows[$record->id]['actions'][0]['href']);
         }
     }
 
@@ -220,7 +222,7 @@ class FieldOfficePortalTest extends TestCase
         $this->assertSame(TransactionStatus::Submitted, $record->transaction_status);
     }
 
-    public function test_a_certification_filed_unpaid_starts_submitted_and_the_or_number_receives_it(): void
+    public function test_a_certification_filed_unpaid_starts_submitted_and_is_received_at_esd(): void
     {
         $input = [
             'transaction_type' => 'Certification', 'office_id' => 2, 'lname' => 'Lim', 'fname' => 'Ben',
@@ -233,12 +235,12 @@ class FieldOfficePortalTest extends TestCase
         $this->assertSame(TransactionStatus::Submitted, $record->transaction_status);
         $this->assertSame(100, $record->amount);
 
-        // The office still holds an unpaid record, so it may enter the OR number.
-        $this->actingAs($this->samar)->put("/fo/transactions/{$record->id}", [
-            ...$input, 'official_receipt' => 'OR-55', 'version' => $record->fresh()->updated_at->format('Y-m-d H:i:s'),
-        ])->assertSessionHasNoErrors();
+        // The office receives the client's documents (attachments only); the
+        // rest, the OR number included, is processed at ESD.
+        $this->actingAs($this->samar)->get("/fo/transactions/{$record->id}/edit")->assertForbidden();
+        $this->actingAs($this->samar)->put("/fo/transactions/{$record->id}", [...$input, 'official_receipt' => 'OR-55'])->assertForbidden();
 
-        $this->assertSame(TransactionStatus::Received, $record->fresh()->transaction_status);
+        $this->assertSame(TransactionStatus::Submitted, $record->fresh()->transaction_status);
     }
 
     public function test_the_duplicate_rule_applies_to_the_office_too(): void
@@ -346,7 +348,7 @@ class FieldOfficePortalTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Transactions/Process')
                 ->where('locked', true)
-                ->where('viewOnly', true)
+                ->where('mode', 'view')
                 ->where('step', 1)
                 ->where('finish', null)
                 ->where('vcasUrl', null)
@@ -400,30 +402,100 @@ class FieldOfficePortalTest extends TestCase
         $this->actingAs($this->samar)->get('/fo/transactions')->assertInertia(function (Assert $page) use ($unpaid, $paid) {
             $rows = collect($page->toArray()['props']['transactions']['data'])->keyBy('id');
 
-            $this->assertFalse($rows[$unpaid->id]['can_forward']);
-            $this->assertTrue($rows[$unpaid->id]['awaiting_payment']);
-            $this->assertTrue($rows[$paid->id]['can_forward']);
-            $this->assertFalse($rows[$paid->id]['awaiting_payment']);
-            // Still the office's own to edit while it waits for payment.
+            // Unpaid: Receive (take the payment) or Return. Paid: Forward to RO.
+            $this->assertSame(['receive', 'return', 'history'], array_column($rows[$unpaid->id]['actions'], 'key'));
+            $this->assertSame(['forward', 'history'], array_column($rows[$paid->id]['actions'], 'key'));
             $this->assertTrue($rows[$unpaid->id]['can_work']);
         });
     }
 
-    public function test_the_workflow_offers_the_office_only_forwarding(): void
-    {
-        $workflow = app(TransactionWorkflow::class);
-        $labels = fn (Transaction $t, User $as) => array_column($workflow->availableActions($t->load('office'), $as), 'label');
+    // ─── Cancelling ───────────────────────────────────────────────────────
 
-        $this->assertSame(['Forward to RO'], $labels($this->record(TransactionStatus::Submitted), $this->samar));
-        $this->assertSame(['Cancel transaction'], $labels($this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification]), $this->samar));
-        $this->assertSame([], $labels($this->record(TransactionStatus::Received, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']), $this->samar));
-        $this->assertSame([], $labels($this->record(TransactionStatus::Returned), $this->samar));
-        $this->assertSame([], $labels($this->record(TransactionStatus::Received), $this->samar));
-        $this->assertSame([], $labels($this->record(TransactionStatus::Returned), $this->admin));
-        $this->assertSame(['Approve', 'Disapprove', 'Return to applicant'], $labels($this->record(TransactionStatus::Received), $this->admin));
+    // ─── Receiving ────────────────────────────────────────────────────────
+
+    public function test_receiving_a_certification_opens_the_processing_page_on_the_files(): void
+    {
+        $record = $this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification]);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$record->id}/process")->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Transactions/Process')
+                ->where('mode', 'attachments')
+                ->where('locked', true)
+                ->where('step', 4)
+                ->where('finish', null)
+                ->where('vcasUrl', null)
+                ->where('base', '/fo/transactions')
+                ->has('steps', 4));
     }
 
-    // ─── Cancelling ───────────────────────────────────────────────────────
+    public function test_receiving_a_certification_saves_the_attachments_and_nothing_else(): void
+    {
+        $record = $this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification, 'lname' => 'Keep']);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$record->id}/process/4", [
+            'attachment_1' => UploadedFile::fake()->create('id.pdf', 50, 'application/pdf'),
+            'lname' => 'Changed',
+            'official_receipt' => 'OR-99',
+        ])->assertRedirect("/fo/transactions/{$record->id}/process?step=4")->assertSessionHas('status');
+
+        $fresh = $record->fresh();
+        $this->assertSame('Keep', $fresh->lname);
+        $this->assertNull($fresh->official_receipt);
+        $this->assertSame(TransactionStatus::Submitted, $fresh->transaction_status);
+        $stored = IssuanceRequest::where('transaction_id', $record->id)->value('attachment_1');
+        $this->assertNotNull($stored);
+        Storage::disk('attachments')->assertExists($stored);
+        $this->assertSame(1, AuditLog::where('subject_id', $record->id)->where('action', 'transaction.updated')->count());
+    }
+
+    public function test_only_a_submitted_certification_of_the_office_is_received_there(): void
+    {
+        $received = $this->record(TransactionStatus::Received, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']);
+        $spels = $this->record(TransactionStatus::Submitted);
+        $theirs = $this->record(TransactionStatus::Submitted, 3, ['transaction_type' => TransactionType::Certification]);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$received->id}/process")->assertForbidden();
+        $this->actingAs($this->samar)->get("/fo/transactions/{$spels->id}/process")->assertForbidden();
+        $this->actingAs($this->samar)->get("/fo/transactions/{$theirs->id}/process")->assertNotFound();
+        $this->actingAs($this->samar)->post("/fo/transactions/{$received->id}/process/4", ['attachment_1' => UploadedFile::fake()->create('id.pdf', 50, 'application/pdf')])->assertForbidden();
+    }
+
+    public function test_receiving_a_spels_application_puts_payment_first_with_its_logistics(): void
+    {
+        $record = $this->record(TransactionStatus::Submitted, 2, ['official_receipt' => null]);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$record->id}/edit")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('paymentFirst', true)
+                ->missing('receiveOnSave')
+                ->where('logistics.1.key', 'paid')
+                ->where('logistics.1.done', false));
+    }
+
+    // ─── Returning ────────────────────────────────────────────────────────
+
+    public function test_the_office_returns_an_unpaid_application_with_a_reason(): void
+    {
+        $record = $this->record(TransactionStatus::Submitted, 2, ['official_receipt' => null]);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$record->id}/return", [])->assertSessionHasErrors('remarks');
+        $this->actingAs($this->samar)->post("/fo/transactions/{$record->id}/return", ['remarks' => 'Client withdrew'])->assertSessionHas('status');
+
+        $fresh = $record->fresh();
+        $this->assertSame(TransactionStatus::Returned, $fresh->transaction_status);
+        $this->assertStringContainsString('Client withdrew', $fresh->remarks);
+    }
+
+    public function test_a_paid_application_or_a_certification_is_not_returned_by_the_office(): void
+    {
+        $paid = $this->record(TransactionStatus::Submitted, 2, ['official_receipt' => 'OR-1']);
+        $cert = $this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification]);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$paid->id}/return", ['remarks' => 'x'])->assertForbidden();
+        $this->actingAs($this->samar)->post("/fo/transactions/{$cert->id}/return", ['remarks' => 'x'])->assertForbidden();
+        $this->assertSame(TransactionStatus::Submitted, $paid->fresh()->transaction_status);
+    }
 
     public function test_the_office_can_cancel_its_own_submitted_certification_with_a_reason(): void
     {

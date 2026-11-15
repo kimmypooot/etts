@@ -202,6 +202,43 @@ class TransactionFormTest extends TestCase
         }
     }
 
+    public function test_receiving_a_forwarded_application_puts_payment_first_and_offers_save_and_receive(): void
+    {
+        $record = Transaction::factory()->create(['office_id' => 2, 'elig_code' => 'HGE', 'transaction_status' => TransactionStatus::Forwarded, 'official_receipt' => null]);
+
+        $this->actingAs($this->admin)->get("/admin/transactions/{$record->id}/edit")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('paymentFirst', true)
+                ->where('receiveOnSave', true)
+                ->has('logistics', 6));
+    }
+
+    public function test_save_and_receive_needs_the_or_number_then_receives_the_application(): void
+    {
+        $record = Transaction::factory()->create(['office_id' => 2, 'lname' => 'Cruz', 'fname' => 'Ana', 'mname' => 'Reyes', 'elig_code' => 'HGE', 'transaction_status' => TransactionStatus::Forwarded]);
+        $input = $this->spelsInput(['office_id' => 2, 'version' => $record->updated_at->format('Y-m-d H:i:s')]);
+
+        $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", [...$input, 'receive' => 1])->assertSessionHasErrors('official_receipt');
+        $this->assertSame(TransactionStatus::Forwarded, $record->fresh()->transaction_status);
+
+        $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", [...$input, 'official_receipt' => 'OR-77', 'receive' => 1])
+            ->assertRedirect('/admin/transactions')->assertSessionHas('status', fn ($m) => str_contains($m, 'received'));
+
+        $fresh = $record->fresh();
+        $this->assertSame(TransactionStatus::Received, $fresh->transaction_status);
+        $this->assertSame('OR-77', $fresh->official_receipt);
+        $this->assertSame('esd.officer', $fresh->action_officer);
+    }
+
+    public function test_a_plain_save_of_a_forwarded_application_does_not_receive_it(): void
+    {
+        $record = Transaction::factory()->create(['office_id' => 2, 'lname' => 'Cruz', 'fname' => 'Ana', 'mname' => 'Reyes', 'elig_code' => 'HGE', 'transaction_status' => TransactionStatus::Forwarded]);
+
+        $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", $this->spelsInput(['office_id' => 2, 'official_receipt' => 'OR-77']))->assertSessionHasNoErrors();
+
+        $this->assertSame(TransactionStatus::Forwarded, $record->fresh()->transaction_status);
+    }
+
     public function test_the_board_marks_closed_records_for_view_details(): void
     {
         $approved = Transaction::factory()->create(['office_id' => 1, 'transaction_status' => TransactionStatus::Approved]);

@@ -2,10 +2,12 @@
 
 namespace App\Support;
 
+use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Eligibility;
 use App\Models\Office;
 use App\Models\Transaction;
+use App\Services\Transactions\DocumentLogistics;
 use App\Services\Transactions\LookupLists;
 
 /**
@@ -69,8 +71,13 @@ final class TransactionFormPresenter
         return [
             'mode' => 'edit',
             'base' => $this->base,
-            'readOnly' => $readOnly ?? self::isLocked($transaction),
+            'readOnly' => $isReadOnly = $readOnly ?? self::isLocked($transaction),
             'viewOnly' => $readOnly === true,
+            // Receiving a SPELS application: the client pays before it can proceed, so Payment comes first.
+            'paymentFirst' => ! $isReadOnly
+                && $transaction->transaction_type->isSpels()
+                && in_array($transaction->transaction_status, [TransactionStatus::Submitted, TransactionStatus::Forwarded], true),
+            'logistics' => $transaction->transaction_type->isSpels() ? DocumentLogistics::for($transaction) : null,
             'canPrint' => $this->canPrint,
             'officeLocked' => $this->lockedOfficeId !== null,
             'id' => $transaction->id,

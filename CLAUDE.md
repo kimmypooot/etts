@@ -61,8 +61,9 @@ Artisan commands (`app/Console/Commands`), all about the legacy migration:
 ## Architecture
 
 - **Thin controllers, logic in `app/Services/*`**: `Transactions`
-  (`TransactionRecorder`, `TransactionWorkflow`, `TransactionArchiver`,
-  `AttachmentStore`, `BoardFilters`, `ProcessSteps`, `VcasLink`, `LookupLists`),
+  (`TransactionRecorder`, `TransactionWorkflow`, `TransactionActions`,
+  `TransactionArchiver`, `AttachmentStore`, `BoardFilters`, `ProcessSteps`,
+  `DocumentLogistics`, `VcasLink`, `LookupLists`),
   `Transmittals`, `Spels` (duplicate
   check vs duplicate audit are deliberately separate classes), `Reports`,
   `Kiosk`, `Imis` (people directory), `Legacy` (import and sync).
@@ -74,11 +75,21 @@ Artisan commands (`app/Console/Commands`), all about the legacy migration:
   office for the rest of the request. The choice is kept in the session and
   checked against the offices IMIS returned at sign-in. Scopes and policies
   just read `office_id`. Never save the chosen office to the account.
+- **Row buttons**: `TransactionActions` is the one place that decides which
+  buttons a board row shows, by portal (ESD or field office), type, status and
+  payment. Both boards render its list (`RowActions.vue`, `ActionDialog.vue`);
+  `TransactionWorkflow` only says what is legal (`canForward`, `canReceive`,
+  `canMove`, `previousStatus`). A field office works on a record only while it
+  is Submitted; a SPELS application is forwarded and received only once it has
+  an OR number.
 - **Issuance processing page**: `ProcessSteps` is the one place that sets
   the fields per step, the required fields, the current step and whether a
   record can still be edited. The controller, the form request and the page
-  all use it. `VcasLink` builds the `vcas://` launcher URL from the saved
-  record, encoding each value on its own.
+  all use it; `App\Support\ProcessPage` builds the page props for its three
+  modes (ESD `process`, field office `view` and `attachments`). A record in a
+  final status is locked everywhere (`TransactionFormPresenter::isLocked`).
+  `VcasLink` builds the `vcas://` launcher URL from the saved record, encoding
+  each value on its own.
 - **Pick lists**: `LookupLists` gives the forms (kiosk, ESD, FO, processing
   page) their eligibility and place of examination choices from the Settings
   tables (`eligibilities`, `exam_centers`) and the matching validation rules.

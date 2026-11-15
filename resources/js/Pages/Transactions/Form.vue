@@ -12,6 +12,7 @@ import SignatoryPicker from '@/Components/Transactions/SignatoryPicker.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import FileInput from '@/Components/Forms/FileInput.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
+import DocumentLogistics from '@/Components/Transactions/DocumentLogistics.vue';
 import { formatNumber } from '@/Utils/format.js';
 
 const props = defineProps({
@@ -29,6 +30,12 @@ const props = defineProps({
     // A view, not a locked edit: there is nothing to revert from here.
     viewOnly: { type: Boolean, default: false },
     canPrint: { type: Boolean, default: true },
+    // Receiving a SPELS application: Payment comes first, emphasised.
+    paymentFirst: { type: Boolean, default: false },
+    // ESD's Receive: "Save and receive" (needs the OR number) next to Save.
+    receiveOnSave: { type: Boolean, default: false },
+    // SPELS: the Document Logistics side panel (null for other types).
+    logistics: { type: Array, default: null },
 });
 
 const editing = props.mode === 'edit';
@@ -120,13 +127,13 @@ const eligibilityOptions = computed(() => [{ value: '', label: 'Choose an eligib
 const issuanceEligibilityOptions = computed(() => [{ value: '', label: '—' }, ...props.options.issuanceEligibilities]);
 const examCenterOptions = computed(() => [{ value: '', label: '—' }, ...props.options.examCenters]);
 
-const submit = () => {
+const submit = (receive = false) => {
     if (props.readOnly) return;
 
     const options = { preserveScroll: true, forceFormData: true };
 
     if (editing) {
-        form.transform((data) => ({ ...data, _method: 'put' })).post(`${props.base}/${props.id}`, options);
+        form.transform((data) => ({ ...data, _method: 'put', ...(receive ? { receive: 1 } : {}) })).post(`${props.base}/${props.id}`, options);
     } else {
         form.post(props.base, options);
     }
@@ -164,9 +171,10 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
             This application was filed at ESD and has not been received yet. Saving it with an OR number confirms the walk-in and marks it received.
         </Alert>
 
-        <form class="max-w-5xl" @submit.prevent="submit">
+        <div :class="logistics ? 'gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_18rem]' : ''">
+        <form class="max-w-5xl min-w-0" @submit.prevent="submit()">
             <!-- Read-only: the browser disables every control inside; links to files still open. -->
-            <fieldset :disabled="readOnly" class="min-w-0">
+            <fieldset :disabled="readOnly" class="flex min-w-0 flex-col">
             <section :class="sectionClass" aria-labelledby="sec-applicant">
                 <h2 id="sec-applicant" :class="headingClass">Applicant</h2>
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -201,8 +209,15 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                 </Alert>
             </section>
 
-            <section :class="sectionClass" aria-labelledby="sec-payment">
-                <h2 id="sec-payment" :class="headingClass">Payment</h2>
+            <!-- Receiving: the client pays before the application can proceed, so Payment moves to the top. -->
+            <section :class="[sectionClass, paymentFirst ? 'order-first border-2 border-primary bg-primary/5' : '']" aria-labelledby="sec-payment">
+                <h2 id="sec-payment" :class="headingClass">
+                    Payment
+                    <span v-if="paymentFirst" class="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-white">Required first</span>
+                </h2>
+                <p v-if="paymentFirst" class="-mt-2 mb-4 text-sm text-text">
+                    The client pays before this application can proceed. Enter the OR number from the official receipt.
+                </p>
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Field id="official_receipt" v-model="form.official_receipt" label="OR number" :error="form.errors.official_receipt" />
                     <Field id="or_date" v-model="form.or_date" type="date" label="OR date" :error="form.errors.or_date" />
@@ -330,9 +345,15 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                 <Button v-if="readOnly" variant="secondary" :href="props.base">Back to transactions</Button>
                 <template v-else>
                     <Button variant="secondary" :href="props.base">Cancel</Button>
-                    <Button type="submit" :loading="form.processing">{{ editing ? 'Save changes' : 'Create transaction' }}</Button>
+                    <Button type="submit" :variant="receiveOnSave ? 'secondary' : 'primary'" :loading="form.processing">{{ editing ? 'Save changes' : 'Create transaction' }}</Button>
+                    <Button v-if="receiveOnSave" type="button" :loading="form.processing" :disabled="!form.official_receipt" title="Needs the OR number" @click="submit(true)">
+                        <Icon name="check" size="sm" />Save and receive
+                    </Button>
                 </template>
             </div>
         </form>
+
+        <DocumentLogistics v-if="logistics" :steps="logistics" />
+        </div>
     </StaffLayout>
 </template>

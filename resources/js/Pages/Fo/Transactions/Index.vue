@@ -16,12 +16,13 @@ import FilterBar from '@/Components/Forms/FilterBar.vue';
 import FilterField from '@/Components/Forms/FilterField.vue';
 import SearchInput from '@/Components/Forms/SearchInput.vue';
 import DateRange from '@/Components/Forms/DateRange.vue';
-import TextInput from '@/Components/Forms/TextInput.vue';
 import FormGroup from '@/Components/Forms/FormGroup.vue';
 import TransactionStatusBadge from '@/Components/Transactions/TransactionStatusBadge.vue';
 import TransactionTypeBadge from '@/Components/Transactions/TransactionTypeBadge.vue';
 import StatusChips from '@/Components/Transactions/StatusChips.vue';
 import TimelineModal from '@/Components/Transactions/TimelineModal.vue';
+import RowActions from '@/Components/Transactions/RowActions.vue';
+import ActionDialog from '@/Components/Transactions/ActionDialog.vue';
 import { formatDate } from '@/Utils/format.js';
 import { useRowFlash } from '@/Composables/useRowFlash';
 import { useLiveRefresh } from '@/Composables/useLiveRefresh';
@@ -75,48 +76,16 @@ const footerSummary = computed(() => {
 
 const typeOptions = [{ value: '', label: 'All types' }, ...props.options.types];
 
-// ─── Forward one application ──────────────────────────────────────────────
-const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-const forwarding = ref(null);
-const forwardForm = useForm({ date: today() });
-
-const openForward = (row) => {
-    forwarding.value = row;
-    forwardForm.defaults({ date: today() });
-    forwardForm.reset();
-    forwardForm.clearErrors();
-};
-
 const { flash, isFlashing } = useRowFlash();
 useLiveRefresh(`${base}/pulse`, ['transactions', 'counts']);
 
-const submitForward = () =>
-    forwardForm.post(`${base}/${forwarding.value.id}/forward`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            flash(forwarding.value.id);
-            forwarding.value = null;
-        },
-    });
-
-// ─── Cancel a submitted certification or authentication ───────────────────
-const cancelling = ref(null);
-const cancelForm = useForm({ remarks: '' });
-
-const openCancel = (row) => {
-    cancelling.value = row;
-    cancelForm.reset();
-    cancelForm.clearErrors();
+// ─── One record: the row's actions (TransactionActions on the server) ────
+const acting = ref(null); // { row, action }
+const openAction = (row, action) => (acting.value = { row, action });
+const actionDone = (id) => {
+    flash(id);
+    acting.value = null;
 };
-
-const submitCancel = () =>
-    cancelForm.post(`${base}/${cancelling.value.id}/cancel`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            flash(cancelling.value.id);
-            cancelling.value = null;
-        },
-    });
 
 // ─── History and delete ───────────────────────────────────────────────────
 const viewing = ref(null);
@@ -125,6 +94,7 @@ const deleteForm = useForm({ ids: [], reason: '', note: '' });
 const deleteReasons = [{ value: '', label: 'Choose a reason…' }, ...props.options.deletionReasons];
 
 const openDelete = (row) => {
+    viewing.value = null;
     deleting.value = row;
     deleteForm.reset();
     deleteForm.clearErrors();
@@ -200,8 +170,7 @@ const inputClass =
                     <th scope="col">Type</th>
                     <th scope="col" :aria-sort="ariaSort('date')"><button type="button" class="font-semibold hover:underline" @click="sortBy('date')">Filed</button></th>
                     <th scope="col" :aria-sort="ariaSort('status')"><button type="button" class="font-semibold hover:underline" @click="sortBy('status')">Status</button></th>
-                    <th scope="col">Next step</th>
-                    <th scope="col" class="sticky right-0 w-28 bg-inherit"><span class="sr-only">Edit, history and delete</span></th>
+                    <th scope="col" class="sticky right-0 bg-inherit text-right">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -217,26 +186,8 @@ const inputClass =
                     <td><TransactionTypeBadge :type="row.type" /></td>
                     <td class="whitespace-nowrap text-sm">{{ formatDate(row.transaction_date) }}</td>
                     <td><TransactionStatusBadge :status="row.status" /></td>
-                    <td class="min-w-40">
-                        <Button v-if="row.can_forward" variant="primary" size="sm" @click="openForward(row)">Forward to RO</Button>
-                        <span v-else-if="row.awaiting_payment" class="text-sm text-text-muted" title="Enter the OR number to forward this application to the Regional Office">Awaiting payment</span>
-                        <Button v-if="row.can_cancel" variant="outline" size="sm" @click="openCancel(row)">Cancel transaction</Button>
-                    </td>
-                    <td class="sticky right-0 w-28 bg-surface text-right whitespace-nowrap">
-                        <div class="flex items-center justify-end">
-                            <Button v-if="row.can_work" variant="ghost" size="sm" :href="`${base}/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
-                                <Icon name="pencil" size="sm" />
-                            </Button>
-                            <Button v-else-if="row.can_view" variant="ghost" size="sm" :href="`${base}/${row.id}`" :aria-label="`View details of transaction ${row.id}`" title="View details" icon-only>
-                                <Icon name="eye" size="sm" />
-                            </Button>
-                            <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
-                                <Icon name="clock" size="sm" />
-                            </Button>
-                            <Button v-if="row.can_work" variant="ghost" size="sm" :aria-label="`Delete transaction ${row.id}`" title="Delete" icon-only @click="openDelete(row)">
-                                <Icon name="trash" size="sm" />
-                            </Button>
-                        </div>
+                    <td class="sticky right-0 min-w-56 bg-surface">
+                        <RowActions :row="row" @act="openAction" @history="viewing = $event" />
                     </td>
                 </tr>
             </tbody>
@@ -250,34 +201,20 @@ const inputClass =
             :last-page="transactions.last_page"
         />
 
-        <Modal :open="forwarding !== null" title="Forward to the Regional Office" tone="primary" icon="upload" @close="forwarding = null">
-            <form v-if="forwarding" id="forward-form" class="space-y-4" @submit.prevent="submitForward">
-                <p class="text-sm text-text-muted">#{{ forwarding.id }} · {{ personName(forwarding.name) }}</p>
-                <TextInput id="forward-date" v-model="forwardForm.date" type="date" label="Date sent" required :invalid="!!forwardForm.errors.date" />
-                <p v-if="forwardForm.errors.date" class="text-sm text-danger">{{ forwardForm.errors.date }}</p>
-                <p class="text-xs text-text-muted">To send several at once with a routing slip, use a transmittal instead.</p>
-            </form>
-            <template #footer>
-                <Button variant="secondary" @click="forwarding = null">Cancel</Button>
-                <Button type="submit" form="forward-form" :loading="forwardForm.processing">Forward</Button>
-            </template>
-        </Modal>
+        <!-- Forward, cancel or return, from the row -->
+        <ActionDialog :acting="acting" @close="acting = null" @done="actionDone" />
 
-        <Modal :open="cancelling !== null" :title="cancelling ? `Cancel #${cancelling.id}` : ''" tone="danger" icon="close" @close="cancelling = null">
-            <form v-if="cancelling" id="cancel-form" class="space-y-4" @submit.prevent="submitCancel">
-                <p class="text-sm text-text-muted">{{ personName(cancelling.name) }} · {{ cancelling.type }}</p>
-                <Alert tone="warning">The record stays on file as Cancelled. Only a submitted request (not yet paid) can be cancelled by your office.</Alert>
-                <FormGroup id="cancel-remarks" label="Reason" required :error="cancelForm.errors.remarks">
-                    <textarea id="cancel-remarks" v-model="cancelForm.remarks" rows="3" maxlength="1000" required :class="inputClass" />
-                </FormGroup>
-            </form>
-            <template #footer>
-                <Button variant="secondary" @click="cancelling = null">Keep it</Button>
-                <Button type="submit" form="cancel-form" variant="danger" :loading="cancelForm.processing">Cancel transaction</Button>
+        <!-- Logs/History, with delete while the record is still with the office -->
+        <TimelineModal :record="viewing" :base="base" @close="viewing = null">
+            <template #tools>
+                <div v-if="viewing?.can_work" class="mb-4 flex justify-end rounded-md border border-border bg-surface-muted p-3">
+                    <Button variant="danger" size="sm" @click="openDelete(viewing)">
+                        <Icon name="trash" size="sm" />
+                        Delete
+                    </Button>
+                </div>
             </template>
-        </Modal>
-
-        <TimelineModal :record="viewing" :base="base" @close="viewing = null" />
+        </TimelineModal>
 
         <Modal :open="deleting !== null" :title="deleting ? `Delete #${deleting.id}` : ''" tone="danger" icon="trash" @close="deleting = null">
             <form v-if="deleting" id="delete-form" class="space-y-4" @submit.prevent="submitDelete">

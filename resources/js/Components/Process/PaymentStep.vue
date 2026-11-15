@@ -11,7 +11,11 @@ const props = defineProps({
     options: { type: Object, required: true },
     attachments: { type: Array, default: () => [] },
     readonly: { type: Boolean, default: false },
+    // The field office's Receive: everything locked except the files.
+    filesOpen: { type: Boolean, default: false },
 });
+
+const canUpload = computed(() => !props.readonly || props.filesOpen);
 
 const typeOptions = computed(() => props.options.types.filter((type) => type.value !== 'Special Eligibility Application'));
 const price = computed(() => (Number(props.form.coe_copies) || 0) * props.options.prices.coe + (Number(props.form.auth_copies) || 0) * props.options.prices.auth);
@@ -23,8 +27,9 @@ const onFile = (slot) => props.attachments.find((a) => a.slot === slot);
 </script>
 
 <template>
+    <div class="space-y-6">
     <fieldset :disabled="readonly" class="space-y-6">
-        <legend class="sr-only">Payment and files</legend>
+        <legend class="sr-only">Payment</legend>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FormGroup id="transaction_type" label="Transaction type" required :error="form.errors.transaction_type">
                 <Select id="transaction_type" v-model="form.transaction_type" :options="typeOptions" />
@@ -39,16 +44,20 @@ const onFile = (slot) => props.attachments.find((a) => a.slot === slot);
             </div>
         </div>
         <p class="text-sm text-text-muted">₱{{ options.prices.coe }} per certificate and ₱{{ options.prices.auth }} per authentication. The amount is computed when you save.</p>
+    </fieldset>
 
+    <fieldset :disabled="!canUpload">
+        <legend class="sr-only">Files</legend>
         <div class="grid gap-4 sm:grid-cols-2">
             <FormGroup v-for="item in slots" :id="`attachment_${item.slot}`" :key="item.slot" :label="item.label" :error="form.errors[`attachment_${item.slot}`]">
-                <p v-if="readonly" class="text-sm text-text-muted">{{ onFile(item.slot) ? 'On record: open it from the attachments panel.' : 'No file.' }}</p>
-                <FileInput v-if="!readonly" :id="`attachment_${item.slot}`" v-model="form[`attachment_${item.slot}`]" accept=".pdf,.jpg,.jpeg,.png" :invalid="!!form.errors[`attachment_${item.slot}`]" />
-                <p v-if="!readonly" class="mt-1.5 text-xs text-text-muted">
+                <p v-if="!canUpload" class="text-sm text-text-muted">{{ onFile(item.slot) ? 'On record: open it from the attachments panel.' : 'No file.' }}</p>
+                <FileInput v-if="canUpload" :id="`attachment_${item.slot}`" v-model="form[`attachment_${item.slot}`]" accept=".pdf,.jpg,.jpeg,.png" :invalid="!!form.errors[`attachment_${item.slot}`]" />
+                <p v-if="canUpload" class="mt-1.5 text-xs text-text-muted">
                     {{ onFile(item.slot) ? 'A file is on record; uploading replaces it.' : 'No file yet.' }}
                     PDF, JPG or PNG, up to {{ Math.round(options.maxKb / 1024) }} MB.
                 </p>
             </FormGroup>
         </div>
     </fieldset>
+    </div>
 </template>

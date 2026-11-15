@@ -217,6 +217,61 @@ final class TransactionRecorder
     }
 
     /**
+     * Adds or replaces the attachments of a certification or authentication,
+     * and nothing else: the field office's Receive step. Like a full save, the
+     * old file stays on disk (the audit trail still names it).
+     */
+    public function replaceAttachments(Transaction $transaction, User $actor, ?UploadedFile $attachment1, ?UploadedFile $attachment2): Transaction
+    {
+        if ($attachment1 === null && $attachment2 === null) {
+            throw new WorkflowException('Choose a file to upload first.');
+        }
+
+        $stored = [];
+
+        try {
+            return DB::transaction(function () use ($transaction, $actor, $attachment1, $attachment2, &$stored) {
+                $locked = Transaction::query()->with('issuanceRequest')->whereKey($transaction->getKey())->lockForUpdate()->first();
+
+                if ($locked === null) {
+                    throw new WorkflowException('The transaction no longer exists.');
+                }
+
+                if (! $locked->transaction_type->isIssuance()) {
+                    throw new WorkflowException('Only a certification or authentication carries attachments.');
+                }
+
+                $issuance = $locked->issuanceRequest ?? new IssuanceRequest(['transaction_id' => $locked->id]);
+                $changed = [];
+
+                foreach ([1 => $attachment1, 2 => $attachment2] as $slot => $upload) {
+                    if (($name = $this->attachments->store($upload)) !== null) {
+                        $stored[] = $name;
+                        $issuance->{"attachment_{$slot}"} = $name;
+                        $changed[] = "attachment_{$slot}";
+                    }
+                }
+
+                $issuance->save();
+                $locked->touch();
+
+                AuditLog::record('transaction.updated', $locked,
+                    after: ['summary' => 'Attached files ('.implode(', ', $changed).').', 'changed' => $changed],
+                    user: $actor,
+                );
+
+                return $locked->fresh();
+            });
+        } catch (\Throwable $e) {
+            foreach ($stored as $name) {
+                $this->attachments->forget($name);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
      * Quick edit of the fields staff correct most: the OR number, details,
      * remarks and the three dates. Dates must run in order.
      *

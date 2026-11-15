@@ -28,9 +28,12 @@ class TransactionScreensTest extends TestCase
         $this->admin = User::factory()->admin()->create(['username' => 'esd.officer']);
     }
 
+    /** A SPELS application is paid (it has an OR number) unless `$extra` says otherwise. */
     private function make(TransactionStatus $status, array $extra = []): Transaction
     {
-        return Transaction::factory()->create(['transaction_status' => $status, ...$extra]);
+        $spels = ($extra['transaction_type'] ?? TransactionType::Spels) === TransactionType::Spels;
+
+        return Transaction::factory()->create(['transaction_status' => $status, 'official_receipt' => $spels ? 'OR-0001' : null, ...$extra]);
     }
 
     // ─── Status chips ─────────────────────────────────────────────────────
@@ -161,12 +164,16 @@ class TransactionScreensTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->has('transactions.data', 0));
     }
 
-    public function test_each_row_carries_the_actions_the_workflow_allows(): void
+    public function test_each_row_carries_its_buttons(): void
     {
-        $this->make(TransactionStatus::Forwarded);
+        $record = $this->make(TransactionStatus::Forwarded);
 
-        $this->actingAs($this->admin)->get('/admin/transactions')
-            ->assertInertia(fn (Assert $page) => $page->where('transactions.data.0.actions.0.kind', 'receive'));
+        $this->actingAs($this->admin)->get('/admin/transactions?office=all')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('transactions.data.0.actions.0.key', 'receive')
+                ->where('transactions.data.0.actions.0.href', "/admin/transactions/{$record->id}/edit")
+                ->where('transactions.data.0.actions.1.key', 'return')
+                ->where('transactions.data.0.actions.2.kind', 'history'));
     }
 
     // ─── Actions ──────────────────────────────────────────────────────────

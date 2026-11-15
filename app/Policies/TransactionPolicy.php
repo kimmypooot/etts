@@ -6,6 +6,7 @@ use App\Enums\TransactionStatus;
 use App\Enums\UserRole;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Transactions\TransactionWorkflow;
 
 /**
  * The ESD transaction screens are for ESD administrators. A field office user
@@ -78,6 +79,37 @@ class TransactionPolicy
             && $transaction->office_id === $user->office_id
             && $transaction->transaction_type->isIssuance()
             && $transaction->transaction_status === TransactionStatus::Submitted;
+    }
+
+    /**
+     * Receive a SPELS application on its form (take the payment, correct the
+     * details) while it is still submitted. A certification or authentication
+     * is received on the processing page instead ({@see receiveAsOffice()}).
+     */
+    public function editAsOffice(User $user, Transaction $transaction): bool
+    {
+        return $this->workAsOffice($user, $transaction) && $transaction->transaction_type->isSpels();
+    }
+
+    /**
+     * Receive a certification or authentication: the processing page, where
+     * the office adds the attachments (and nothing else) while it is submitted.
+     */
+    public function receiveAsOffice(User $user, Transaction $transaction): bool
+    {
+        return $this->workAsOffice($user, $transaction) && $transaction->transaction_type->isIssuance();
+    }
+
+    /**
+     * Return (withdraw) an own-office SPELS application that is submitted and
+     * not yet paid. SPELS has no Cancelled status; Returned is its equivalent.
+     * A paid one is forwarded instead.
+     */
+    public function returnAsOffice(User $user, Transaction $transaction): bool
+    {
+        return $this->workAsOffice($user, $transaction)
+            && $transaction->transaction_type->isSpels()
+            && ! TransactionWorkflow::isPaid($transaction);
     }
 
     public static function stillWithOffice(Transaction $transaction): bool

@@ -11,9 +11,12 @@ use App\Services\Transactions\VcasLink;
  * The props of the issuance processing page (Transactions/Process), for the
  * ESD page and the field office's read-only view of the same record.
  *
- * The ESD page has five steps, the last one printing and finishing. The field
- * office view has steps 1 to 4 only, all open and read-only: no saving, no
- * printing, no VCAS, no status moves.
+ * Modes:
+ *  - `process`: the ESD page. Five steps, the last one printing and finishing.
+ *  - `view`: the field office's View Details. Steps 1 to 4, all open and
+ *    read-only: no saving, no printing, no VCAS, no status moves.
+ *  - `attachments`: the field office's Receive. Like `view`, except that the
+ *    attachments (step 4) can be added or replaced and saved.
  */
 final class ProcessPage
 {
@@ -22,8 +25,9 @@ final class ProcessPage
     /**
      * @return array<string, mixed>
      */
-    public static function props(Transaction $transaction, TransactionFormPresenter $presenter, ?int $requestedStep, bool $viewOnly = false): array
+    public static function props(Transaction $transaction, TransactionFormPresenter $presenter, ?int $requestedStep, string $mode = 'process'): array
     {
+        $viewOnly = $mode !== 'process';
         $form = $presenter->edit($transaction->loadMissing('office'), $viewOnly ? true : null);
         $record = $form['record'];
         $locked = $form['readOnly'];
@@ -34,7 +38,12 @@ final class ProcessPage
         // from printing or releasing: every step is open. ESD lands on the
         // last step (print and finish); a view starts at the top.
         $first = $locked ? $last : ProcessSteps::firstIncompleteStep($record);
-        $requested = $requestedStep ?? ($viewOnly ? 1 : $first);
+        // Receive (attachments) opens on the files; a view at the top.
+        $requested = $requestedStep ?? match ($mode) {
+            'attachments' => 4,
+            'view' => 1,
+            default => $first,
+        };
 
         return [
             ...collect($form)->only(['id', 'status', 'version', 'record', 'attachments', 'options', 'base'])->all(),
@@ -46,7 +55,7 @@ final class ProcessPage
             ], array_keys($labels)),
             'step' => $requested >= 1 && $requested <= $first ? $requested : $first,
             'locked' => $locked,
-            'viewOnly' => $viewOnly,
+            'mode' => $mode,
             'finish' => $finish = $viewOnly ? null : ProcessSteps::finishAction($transaction),
             'finishStatus' => match ($finish) {
                 'complete' => TransactionStatus::Completed->value,

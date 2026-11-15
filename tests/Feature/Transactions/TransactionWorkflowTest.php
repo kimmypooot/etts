@@ -60,7 +60,7 @@ class TransactionWorkflowTest extends TestCase
         foreach ([null, '', '   '] as $receipt) {
             $record = $this->spels(TransactionStatus::Submitted, extra: ['official_receipt' => $receipt])->load('office');
 
-            $this->assertNotContains('forward', array_column($this->workflow->availableActions($record, $this->admin), 'kind'));
+            $this->assertFalse($this->workflow->canForward($record));
 
             try {
                 $this->workflow->forward($record, '2026-05-01', $this->admin);
@@ -74,20 +74,64 @@ class TransactionWorkflowTest extends TestCase
         }
     }
 
-    public function test_a_paid_application_is_offered_forwarding(): void
+    public function test_a_paid_application_can_be_forwarded(): void
     {
         $record = $this->spels(TransactionStatus::Submitted, extra: ['official_receipt' => 'OR-1'])->load('office');
 
-        $this->assertContains('forward', array_column($this->workflow->availableActions($record, $this->admin), 'kind'));
+        $this->assertTrue($this->workflow->canForward($record));
+    }
+
+    public function test_an_application_is_received_only_once_it_is_paid(): void
+    {
+        foreach ([$this->spels(TransactionStatus::Forwarded, extra: ['official_receipt' => null]), $this->spels(TransactionStatus::Submitted, 1, ['official_receipt' => null])] as $record) {
+            $this->assertTrue($this->workflow->awaitsReceipt($record->load('office')));
+            $this->assertFalse($this->workflow->canReceive($record));
+
+            try {
+                $this->workflow->receive($record, '2026-05-01', $this->admin);
+                $this->fail('An unpaid application was received.');
+            } catch (WorkflowException $e) {
+                $this->assertStringContainsString('OR number', $e->getMessage());
+            }
+
+            $this->assertNotSame(TransactionStatus::Received, $record->fresh()->transaction_status);
+        }
+    }
+
+    public function test_a_spels_application_can_be_returned_before_it_is_received(): void
+    {
+        foreach ([TransactionStatus::Submitted, TransactionStatus::Forwarded, TransactionStatus::Received] as $status) {
+            $record = $this->spels($status);
+
+            $this->workflow->changeStatus($record, TransactionStatus::Returned, $this->admin, '2026-05-01', 'Incomplete requirements');
+
+            $this->assertSame(TransactionStatus::Returned, $record->fresh()->transaction_status, $status->value);
+        }
+
+        $this->expectException(WorkflowException::class);
+        $this->workflow->changeStatus($this->spels(TransactionStatus::Approved), TransactionStatus::Returned, $this->admin, null, 'Too late');
+    }
+
+    public function test_a_spels_application_cannot_be_approved_before_it_is_received(): void
+    {
+        $this->expectException(WorkflowException::class);
+        $this->workflow->changeStatus($this->spels(TransactionStatus::Forwarded), TransactionStatus::Approved, $this->admin);
+    }
+
+    public function test_revert_goes_one_step_back_for_a_certification(): void
+    {
+        $this->assertSame(TransactionStatus::Completed, TransactionWorkflow::previousStatus($this->cert(TransactionStatus::Released)));
+        $this->assertSame(TransactionStatus::Received, TransactionWorkflow::previousStatus($this->cert(TransactionStatus::Completed)));
+        $this->assertNull(TransactionWorkflow::previousStatus($this->cert(TransactionStatus::Received)));
+        $this->assertNull(TransactionWorkflow::previousStatus($this->spels(TransactionStatus::Approved)));
     }
 
     public function test_an_esd_filed_spels_record_is_not_forwarded(): void
     {
         $record = $this->spels(TransactionStatus::Submitted, 1)->load('office');
-        $kinds = array_column($this->workflow->availableActions($record, $this->admin), 'kind');
 
-        $this->assertNotContains('forward', $kinds);
-        $this->assertContains('receive', $kinds);
+        $this->assertFalse($this->workflow->canForward($record));
+        $this->assertTrue($this->workflow->canReceive($record));
 
         $this->expectException(WorkflowException::class);
         $this->workflow->forward($record, '2026-05-01', $this->admin);
@@ -378,23 +422,5 @@ class TransactionWorkflowTest extends TestCase
     {
         $this->expectException(WorkflowException::class);
         $this->workflow->revert($this->spels(TransactionStatus::Received), TransactionStatus::Received, $this->admin);
-    }
-
-    // ─── what the screen offers ───────────────────────────────────────────
-
-    public function test_the_offered_actions_follow_the_flow(): void
-    {
-        $labels = fn (Transaction $t) => array_column($this->workflow->availableActions($t->load('office')), 'label');
-
-        $this->assertSame(['Forward to RO'], $labels($this->spels(TransactionStatus::Submitted)));
-        $this->assertSame(['Mark received'], $labels($this->spels(TransactionStatus::Forwarded)));
-        $this->assertSame(['Approve', 'Disapprove', 'Return to applicant'], $labels($this->spels(TransactionStatus::Received)));
-        $this->assertSame(['Cancel transaction'], $labels($this->cert(TransactionStatus::Submitted)), 'Unpaid: only cancel; the OR number receives it.');
-        $this->assertSame(['Cancel transaction'], $labels($this->cert(TransactionStatus::Submitted, ['office_id' => 2])));
-        $this->assertSame(['Mark received', 'Cancel transaction'], $labels($this->cert(TransactionStatus::Submitted, ['official_receipt' => 'OR-1'])));
-        $this->assertSame(['Mark completed', 'Cancel transaction'], $labels($this->cert(TransactionStatus::Received)));
-        $this->assertSame(['Mark released'], $labels($this->cert(TransactionStatus::Completed)));
-        $this->assertSame([], $labels($this->cert(TransactionStatus::Released)));
-        $this->assertSame(['Mark approved and released'], $labels($this->spels(TransactionStatus::Approved)));
     }
 }

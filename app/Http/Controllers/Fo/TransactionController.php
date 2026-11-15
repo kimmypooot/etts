@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Transactions\AttachmentStore;
 use App\Services\Transactions\BoardFilters;
+use App\Services\Transactions\TransactionActions;
 use App\Services\Transactions\TransactionArchiver;
 use App\Services\Transactions\TransactionRecorder;
 use App\Services\Transactions\TransactionWorkflow;
@@ -41,6 +42,7 @@ class TransactionController extends Controller
         private TransactionRecorder $recorder,
         private TransactionWorkflow $workflow,
         private TransactionArchiver $archiver,
+        private TransactionActions $actions,
     ) {}
 
     private function presenter(User $user): TransactionFormPresenter
@@ -68,13 +70,10 @@ class TransactionController extends Controller
                 'date_received_ro' => $transaction->date_received_ro?->toDateString(),
                 'date_completed' => $transaction->date_completed?->toDateString(),
                 'remarks' => $transaction->remarks,
+                // Delete (from the history window) while the record is still with the office.
                 'can_work' => $user->can('workAsOffice', $transaction),
-                // Once out of the office's hands the record is only viewed.
-                'can_view' => ! $user->can('workAsOffice', $transaction),
-                // Forwarding needs proof of payment; the workflow refuses an unpaid one too.
-                'can_forward' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels() && TransactionWorkflow::isPaid($transaction),
-                'awaiting_payment' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels() && ! TransactionWorkflow::isPaid($transaction),
-                'can_cancel' => $user->can('cancelAsOffice', $transaction),
+                // The row's buttons, by type, status and payment (TransactionActions).
+                'actions' => $this->actions->for($transaction, $user),
             ]);
 
         return Inertia::render('Fo/Transactions/Index', [
@@ -133,10 +132,55 @@ class TransactionController extends Controller
         if ($transaction->transaction_type->isIssuance()) {
             $step = $request->query('step');
 
-            return Inertia::render('Transactions/Process', ProcessPage::props($transaction, $presenter, $step === null ? null : (int) $step, viewOnly: true));
+            return Inertia::render('Transactions/Process', ProcessPage::props($transaction, $presenter, $step === null ? null : (int) $step, mode: 'view'));
         }
 
         return Inertia::render('Transactions/Form', $presenter->edit($transaction, readOnly: true));
+    }
+
+    /**
+     * Receive a certification or authentication: the processing page, with
+     * only the attachments open. No printing; ESD processes the rest.
+     */
+    public function process(Request $request, Transaction $transaction): Response
+    {
+        $step = $request->query('step');
+
+        return Inertia::render('Transactions/Process', ProcessPage::props($transaction, $this->presenter($request->user()), $step === null ? null : (int) $step, mode: 'attachments'));
+    }
+
+    /**
+     * Saves the attachments of a certification or authentication being received.
+     */
+    public function saveAttachments(Request $request, Transaction $transaction): RedirectResponse
+    {
+        $rules = ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:'.config('etts.attachments.max_kb')];
+        $request->validate(['attachment_1' => $rules, 'attachment_2' => $rules]);
+
+        try {
+            $this->recorder->replaceAttachments($transaction, $request->user(), $request->file('attachment_1'), $request->file('attachment_2'));
+        } catch (WorkflowException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('fo.transactions.process', [$transaction, 'step' => 4])->with('status', 'Attachments saved.');
+    }
+
+    /**
+     * Returns (withdraws) an unpaid SPELS application, with a reason. The
+     * policy limits this to the office's own submitted, unpaid applications.
+     */
+    public function returnApplication(Request $request, Transaction $transaction): RedirectResponse
+    {
+        $data = $request->validate(['remarks' => ['required', 'string', 'max:1000']]);
+
+        try {
+            $this->workflow->changeStatus($transaction, TransactionStatus::Returned, $request->user(), null, $data['remarks']);
+        } catch (WorkflowException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('status', "Application #{$transaction->id} returned.");
     }
 
     public function edit(Request $request, Transaction $transaction): Response

@@ -25,7 +25,12 @@ use Illuminate\Support\Str;
  *  - A SPELS field-office filing is forwarded and then received. It is forwarded
  *    only once paid (it carries an OR number); until then it stays submitted at
  *    the office. A SPELS filing made at ESD itself has no forwarding leg, so it
- *    is received straight from submitted.
+ *    is received straight from submitted, also only once paid.
+ *  - A SPELS application may be Returned before it is received too (submitted
+ *    or forwarded): that is the SPELS equivalent of cancelling it.
+ *
+ * Which buttons a board shows is {@see TransactionActions}' job; it asks this
+ * class what is legal (canForward, canReceive, canMove, previousStatus).
  *
  * Every change runs in a transaction on a locked row and writes one audit entry
  * per record. Approving a SPELS record passes the one-approval-per-eligibility
@@ -203,63 +208,6 @@ final class TransactionWorkflow
         });
     }
 
-    /**
-     * What the screen may offer for this record now. Each entry is
-     * `['kind' => 'forward'|'receive'|'status', 'status' => ?value, 'label' => string, 'needs_remarks' => bool]`.
-     *
-     * @return list<array{kind: string, status: ?string, label: string, needs_remarks: bool}>
-     */
-    public function availableActions(Transaction $transaction, ?User $actor = null): array
-    {
-        $actions = [];
-        $status = $transaction->transaction_status;
-        $type = $transaction->transaction_type;
-
-        // Only a submitted application is forwarded; a returned one is closed.
-        // ESD is the Regional Office: what it files itself is received, not forwarded.
-        // An unpaid application waits at the office until its OR number is entered.
-        if ($status === TransactionStatus::Submitted && $type->isSpels() && ! ($transaction->office?->isEsd() ?? false) && self::isPaid($transaction)) {
-            $actions[] = ['kind' => 'forward', 'status' => null, 'label' => 'Forward to RO', 'needs_remarks' => false];
-        }
-
-        if ($actor !== null && ! $actor->isAdmin()) {
-            // Receiving and moving a record along is the Regional Office's work.
-            // The office may withdraw a certification or authentication while it is still submitted.
-            if ($status === TransactionStatus::Submitted && $type->isIssuance()) {
-                $actions[] = ['kind' => 'status', 'status' => TransactionStatus::Cancelled->value, 'label' => 'Cancel transaction', 'needs_remarks' => true];
-            }
-
-            return $actions;
-        }
-
-        if ($this->canReceive($transaction)) {
-            $actions[] = ['kind' => 'receive', 'status' => null, 'label' => 'Mark received', 'needs_remarks' => false];
-        }
-
-        $labels = [
-            'Completed' => 'Mark completed',
-            'Released' => 'Mark released',
-            'Approved' => 'Approve',
-            'Approved/Released' => 'Mark approved and released',
-            'Disapproved' => 'Disapprove',
-            'Returned' => 'Return to applicant',
-            'Cancelled' => 'Cancel transaction',
-        ];
-
-        foreach (TransactionStatus::allowedFor($type) as $candidate) {
-            if (isset($labels[$candidate->value]) && $this->moveError($transaction, $candidate) === null) {
-                $actions[] = [
-                    'kind' => 'status',
-                    'status' => $candidate->value,
-                    'label' => $labels[$candidate->value],
-                    'needs_remarks' => in_array($candidate, self::NEEDS_REMARKS, true),
-                ];
-            }
-        }
-
-        return $actions;
-    }
-
     // ─── Rules ────────────────────────────────────────────────────────────
 
     /**
@@ -271,24 +219,76 @@ final class TransactionWorkflow
         return filled($transaction->official_receipt);
     }
 
-    private function canReceive(Transaction $transaction): bool
+    /**
+     * Whether the record can be forwarded to the Regional Office now: a
+     * submitted, paid SPELS application filed at a field office. (ESD is the
+     * Regional Office: what it files itself is received, not forwarded. A
+     * returned application is closed.)
+     */
+    public function canForward(Transaction $transaction): bool
+    {
+        return $transaction->transaction_status === TransactionStatus::Submitted
+            && $transaction->transaction_type->isSpels()
+            && ! ($transaction->office?->isEsd() ?? false)
+            && self::isPaid($transaction);
+    }
+
+    /**
+     * Whether ESD would receive the record once it is paid: a certification
+     * or authentication still submitted, a SPELS application forwarded to it,
+     * or one filed at ESD itself and still submitted.
+     */
+    public function awaitsReceipt(Transaction $transaction): bool
     {
         $status = $transaction->transaction_status;
 
-        // A certification or authentication is received once it is paid, wherever it was filed.
         if ($transaction->transaction_type->isIssuance()) {
-            return $status === TransactionStatus::Submitted && filled($transaction->official_receipt);
+            return $status === TransactionStatus::Submitted;
         }
 
         return $status === TransactionStatus::Forwarded
             || ($status === TransactionStatus::Submitted && ($transaction->office?->isEsd() ?? false));
     }
 
+    /** Whether the record can be received now: it awaits receipt and it is paid. */
+    public function canReceive(Transaction $transaction): bool
+    {
+        return $this->awaitsReceipt($transaction) && self::isPaid($transaction);
+    }
+
+    /** Whether `$to` is a legal next status for the record now. */
+    public function canMove(Transaction $transaction, TransactionStatus $to): bool
+    {
+        return $this->moveError($transaction, $to) === null;
+    }
+
+    /**
+     * The status one step back in a certification or authentication's flow,
+     * for the board's Revert: Released goes back to Completed, Completed to
+     * Received. Null when there is no single step back.
+     */
+    public static function previousStatus(Transaction $transaction): ?TransactionStatus
+    {
+        if (! $transaction->transaction_type->isIssuance()) {
+            return null;
+        }
+
+        return match ($transaction->transaction_status) {
+            TransactionStatus::Released => TransactionStatus::Completed,
+            TransactionStatus::Completed => TransactionStatus::Received,
+            default => null,
+        };
+    }
+
     private function assertCanReceive(Transaction $transaction): void
     {
+        if ($this->awaitsReceipt($transaction) && ! self::isPaid($transaction)) {
+            throw new WorkflowException('Enter the OR number first: a transaction is received only once it is paid.');
+        }
+
         if (! $this->canReceive($transaction)) {
             throw new WorkflowException($transaction->transaction_type->isIssuance()
-                ? 'Only a submitted certification or authentication with an OR number can be received; enter the OR number once it is paid.'
+                ? 'Only a submitted certification or authentication can be received.'
                 : "Only a forwarded transaction can be received; this one is {$transaction->transaction_status->value}.");
         }
     }
@@ -317,7 +317,9 @@ final class TransactionWorkflow
             TransactionStatus::Completed => $from === TransactionStatus::Received ? null : 'Invalid flow: the transaction must be received before it can be marked completed.',
             TransactionStatus::Released => $from === TransactionStatus::Completed ? null : 'Invalid flow: the transaction must be completed before it can be released.',
             TransactionStatus::Cancelled => in_array($from, [TransactionStatus::Submitted, TransactionStatus::Received], true) ? null : 'Invalid flow: only a submitted or received transaction can be cancelled.',
-            TransactionStatus::Approved, TransactionStatus::Disapproved, TransactionStatus::Returned => $from === TransactionStatus::Received ? null : 'Invalid flow: the transaction must be received before this action.',
+            TransactionStatus::Approved, TransactionStatus::Disapproved => $from === TransactionStatus::Received ? null : 'Invalid flow: the transaction must be received before this action.',
+            // Returning a SPELS application is also how one is withdrawn before it is received.
+            TransactionStatus::Returned => in_array($from, [TransactionStatus::Submitted, TransactionStatus::Forwarded, TransactionStatus::Received], true) ? null : 'Invalid flow: only a submitted, forwarded or received application can be returned.',
             TransactionStatus::ApprovedReleased => $from === TransactionStatus::Approved ? null : 'Invalid flow: the transaction must be approved before it can be released.',
             default => 'That status change is not allowed.',
         };
