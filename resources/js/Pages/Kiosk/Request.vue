@@ -261,7 +261,7 @@ const review = computed(() => {
                     <section v-else-if="current === 'record'" class="chart-rise space-y-6" aria-labelledby="record-title">
                         <header>
                             <h1 id="record-title" class="text-3xl font-semibold tracking-tight text-text">Your eligibility record</h1>
-                            <p class="mt-2 text-lg text-text-muted">Tell us about the eligibility on your certificate.</p>
+                            <p class="mt-2 text-lg text-text-muted">Enter eligibility details</p>
                         </header>
                         <div class="rounded-2xl bg-surface-muted/70 p-5 sm:p-6">
                             <div class="grid gap-5 sm:grid-cols-2">
@@ -270,7 +270,7 @@ const review = computed(() => {
                                 <KSelect v-model="form.place_of_exam_issuance" label="Place of Examination / Issuance" required :options="examCenters" :error="errorOf('place_of_exam_issuance')" />
                             </div>
                             <h2 class="mt-6 mb-1 text-xl font-semibold text-text">Name used in Examination / Issuance of Eligibility</h2>
-                            <p class="mb-4 text-base text-text-muted">Exactly as it appears on your certificate, even if it is the same as your name today. Type N/A if you had no middle name or extension.</p>
+                           
                             <div class="grid gap-5 sm:grid-cols-2">
                                 <KField v-model="form.used_lastname" label="Last name used" required :error="errorOf('used_lastname')" />
                                 <KField v-model="form.used_firstname" label="First name used" required :error="errorOf('used_firstname')" />
@@ -284,7 +284,7 @@ const review = computed(() => {
                     <section v-else-if="current === 'you'" class="chart-rise space-y-6" aria-labelledby="you-title">
                         <header>
                             <h1 id="you-title" class="text-3xl font-semibold tracking-tight text-text">About you</h1>
-                            <p class="mt-2 text-lg text-text-muted">Please use your name as it appears on your records.</p>
+                           
                         </header>
                         <div class="rounded-2xl bg-surface-muted/70 p-5 sm:p-6">
                             <h2 class="mb-4 text-xl font-semibold text-text">Primary information</h2>
