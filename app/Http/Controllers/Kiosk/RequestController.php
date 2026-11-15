@@ -24,9 +24,9 @@ use Inertia\Response;
  * attachment checks are the staff ones), filed under the office the terminal is
  * paired to. The visitor never chooses an office or a status.
  *
- * The confirmation is shown once and carries only the tracking number, the
- * request type and the visitor's first name: refreshing it returns to the menu,
- * so nothing personal stays on a shared screen.
+ * The confirmation is shown once and carries only the request type and the
+ * visitor's first name: refreshing it returns to the menu, so nothing personal
+ * stays on a shared screen.
  */
 class RequestController extends Controller
 {
@@ -100,10 +100,8 @@ class RequestController extends Controller
         ]);
 
         $request->session()->flash('kiosk_receipt', [
-            'id' => $transaction->id,
             'type' => $transaction->transaction_type->value,
             'first_name' => $transaction->fname,
-            'office' => $terminal->office?->name,
             'spels' => $transaction->transaction_type->isSpels(),
         ]);
 

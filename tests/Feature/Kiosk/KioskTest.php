@@ -405,16 +405,14 @@ class KioskTest extends TestCase
     {
         [, $token] = $this->pairedTerminal(1);
         $this->device($token)->post('/kiosk/requests', $this->spelsInput());
-        $id = Transaction::sole()->id;
 
         $page = $this->device($token)->get('/kiosk/done')->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Kiosk/Done')
-                ->where('receipt.id', $id)
                 ->where('receipt.first_name', 'Ana')
                 ->where('receipt.spels', true))->viewData('page')['props']['receipt'];
 
-        $this->assertEqualsCanonicalizing(['id', 'type', 'first_name', 'office', 'spels'], array_keys($page));
+        $this->assertEqualsCanonicalizing(['type', 'first_name', 'spels'], array_keys($page));
 
         $this->device($token)->get('/kiosk/done')->assertRedirect('/kiosk');
     }
