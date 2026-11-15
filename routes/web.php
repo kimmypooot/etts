@@ -78,6 +78,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/transactions', [Fo\TransactionController::class, 'store'])->can('createAsOffice', Transaction::class)->name('transactions.store');
         Route::post('/transactions/delete', [Fo\TransactionController::class, 'destroy'])->can('office', Transaction::class)->name('transactions.delete');
         Route::get('/transactions/{id}/timeline', Fo\TimelineController::class)->whereNumber('id')->can('office', Transaction::class)->name('transactions.timeline');
+        Route::get('/transactions/{transaction}', [Fo\TransactionController::class, 'show'])->whereNumber('transaction')->can('viewAsOffice', 'transaction')->name('transactions.show');
         Route::get('/transactions/{transaction}/edit', [Fo\TransactionController::class, 'edit'])->can('workAsOffice', 'transaction')->name('transactions.edit');
         Route::put('/transactions/{transaction}', [Fo\TransactionController::class, 'update'])->can('workAsOffice', 'transaction')->name('transactions.update');
         Route::post('/transactions/{transaction}/forward', [Fo\TransactionController::class, 'forward'])->can('workAsOffice', 'transaction')->name('transactions.forward');

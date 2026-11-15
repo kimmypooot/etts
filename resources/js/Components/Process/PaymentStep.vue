@@ -42,8 +42,9 @@ const onFile = (slot) => props.attachments.find((a) => a.slot === slot);
 
         <div class="grid gap-4 sm:grid-cols-2">
             <FormGroup v-for="item in slots" :id="`attachment_${item.slot}`" :key="item.slot" :label="item.label" :error="form.errors[`attachment_${item.slot}`]">
-                <FileInput :id="`attachment_${item.slot}`" v-model="form[`attachment_${item.slot}`]" accept=".pdf,.jpg,.jpeg,.png" :invalid="!!form.errors[`attachment_${item.slot}`]" />
-                <p class="mt-1.5 text-xs text-text-muted">
+                <p v-if="readonly" class="text-sm text-text-muted">{{ onFile(item.slot) ? 'On record: open it from the attachments panel.' : 'No file.' }}</p>
+                <FileInput v-if="!readonly" :id="`attachment_${item.slot}`" v-model="form[`attachment_${item.slot}`]" accept=".pdf,.jpg,.jpeg,.png" :invalid="!!form.errors[`attachment_${item.slot}`]" />
+                <p v-if="!readonly" class="mt-1.5 text-xs text-text-muted">
                     {{ onFile(item.slot) ? 'A file is on record; uploading replaces it.' : 'No file yet.' }}
                     PDF, JPG or PNG, up to {{ Math.round(options.maxKb / 1024) }} MB.
                 </p>

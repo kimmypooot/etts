@@ -54,7 +54,8 @@ enum TransmittalDirection: string
     {
         return match ($this) {
             self::EsdToFo => [TransactionStatus::Completed, TransactionStatus::Approved, TransactionStatus::Disapproved, TransactionStatus::Returned],
-            self::FoToRo => [TransactionStatus::Submitted, TransactionStatus::Returned],
+            // A returned application is closed for the office, so only new ones go up.
+            self::FoToRo => [TransactionStatus::Submitted],
         };
     }
 }

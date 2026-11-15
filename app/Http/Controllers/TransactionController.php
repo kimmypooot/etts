@@ -9,6 +9,7 @@ use App\Models\Office;
 use App\Models\Transaction;
 use App\Services\Transactions\BoardFilters;
 use App\Services\Transactions\TransactionWorkflow;
+use App\Support\TransactionFormPresenter;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -47,6 +48,8 @@ class TransactionController extends Controller
                 'remarks' => $transaction->remarks,
                 'action_officer' => $transaction->action_officer,
                 'actions' => $workflow->availableActions($transaction),
+                // A final record opens read-only: the row offers View details instead of Edit.
+                'locked' => TransactionFormPresenter::isLocked($transaction),
             ]);
 
         return Inertia::render('Transactions/Index', [

@@ -63,7 +63,8 @@ class TransmittalServiceTest extends TestCase
         $up = $this->service->eligible(TransmittalDirection::FoToRo)->pluck('id')->all();
 
         $this->assertEqualsCanonicalizing([$approved->id, $completed->id, $returned->id], $down);
-        $this->assertEqualsCanonicalizing([$submitted->id, $returned->id], $up);
+        // A returned application goes down to the office only; the office does not resubmit it.
+        $this->assertEqualsCanonicalizing([$submitted->id], $up);
         $this->assertNotContains($received->id, [...$down, ...$up]);
         $this->assertNotContains($released->id, [...$down, ...$up]);
     }
@@ -362,7 +363,7 @@ class TransmittalServiceTest extends TestCase
     public function test_transmitting_forwards_the_applications(): void
     {
         $new = $this->record(TransactionStatus::Submitted, 2);
-        $corrected = $this->record(TransactionStatus::Returned, 2);
+        $corrected = $this->record(TransactionStatus::Submitted, 2);
         $draft = $this->service->createDraft(TransmittalDirection::FoToRo, [$new->id, $corrected->id], '', $this->admin, 2);
 
         $this->service->transmit($draft, '2026-06-01', $this->admin);

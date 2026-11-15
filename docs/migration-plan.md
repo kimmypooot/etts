@@ -369,3 +369,13 @@ Admins in ORD, HRD and PSED are fine: an admin sees every office regardless of u
 - The 8 ERIS holders needing review are skipped for now; 24 were granted.
 - The PACD kiosk host name is still to be decided.
 - A failed kiosk submission now removes its own uploaded files (tested).
+
+## Update: action buttons by office and status (2026-11-16)
+
+Working through the "Transaction Action Buttons and Behaviors by Office and Status" spec.
+
+- **Payment before forwarding.** A field office SPELS application is forwarded to the RO only once it carries an OR number (blank counts as none). `TransactionWorkflow::forward()` refuses an unpaid one, Forward to RO appears only once paid, the FO board shows "Awaiting payment" instead, and FO-to-RO transmittals offer and transmit only paid applications.
+- **A field office works on a record only while it is Submitted** (decided 2026-11-16, replacing the Phase 4 rule above). Once received, forwarded or closed it is View Details only for the office. A Returned application is final for the office: no edit, delete or re-forward, and it no longer goes up in a transmittal (the applicant files a new one). A received certification/authentication is no longer editable or deletable by the office.
+- **View Details** (`/fo/transactions/{id}`, `TransactionPolicy::viewAsOffice`): a SPELS application opens on the form read-only; a certification/authentication on the processing page, steps 1 to 4, read-only, no printing, VCAS or status moves (`App\Support\ProcessPage`, shared with the ESD page).
+- **Read-only once final.** A record in a final status (`TransactionStatus::terminal()`) opens read-only and cannot be saved, on the form as well as the processing page (`TransactionFormPresenter::isLocked`, which `ProcessSteps::isLocked` uses). ESD corrects one by reverting it first; quick edit is unchanged. Both boards show "View details" (eye) instead of Edit for such rows.
+- The form no longer shows the Printing section in the field office portal (its print routes are ESD-only).

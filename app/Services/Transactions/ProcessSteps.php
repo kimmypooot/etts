@@ -5,6 +5,7 @@ namespace App\Services\Transactions;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Models\Transaction;
+use App\Support\TransactionFormPresenter;
 use Illuminate\Validation\Rule;
 
 /**
@@ -141,10 +142,10 @@ final class ProcessSteps
         return 5;
     }
 
-    /** A completed, released or cancelled record is no longer edited. */
+    /** A completed, released or cancelled record is no longer edited (the rule every form uses). */
     public static function isLocked(Transaction $transaction): bool
     {
-        return in_array($transaction->transaction_status, [TransactionStatus::Completed, TransactionStatus::Released, TransactionStatus::Cancelled], true);
+        return TransactionFormPresenter::isLocked($transaction);
     }
 
     /** The status move step 5 offers: 'complete', 'release' or none. */

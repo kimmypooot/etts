@@ -227,6 +227,9 @@ const inputClass =
                             <Button v-if="row.can_work" variant="ghost" size="sm" :href="`${base}/${row.id}/edit`" :aria-label="`Edit transaction ${row.id}`" title="Edit" icon-only>
                                 <Icon name="pencil" size="sm" />
                             </Button>
+                            <Button v-else-if="row.can_view" variant="ghost" size="sm" :href="`${base}/${row.id}`" :aria-label="`View details of transaction ${row.id}`" title="View details" icon-only>
+                                <Icon name="eye" size="sm" />
+                            </Button>
                             <Button variant="ghost" size="sm" :aria-label="`History of transaction ${row.id}`" title="History" icon-only @click="viewing = row">
                                 <Icon name="clock" size="sm" />
                             </Button>

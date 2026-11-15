@@ -20,12 +20,24 @@ final class TransactionFormPresenter
      * @param  string  $base  URL prefix of the portal's transaction screens.
      * @param  string  $attachmentRoute  Name of the route that shows an attachment.
      * @param  int|null  $lockedOfficeId  When set, the form can only file at this office.
+     * @param  bool  $canPrint  Whether this portal prints (ESD does; field offices do not).
      */
     public function __construct(
         private string $base,
         private string $attachmentRoute,
         private ?int $lockedOfficeId = null,
+        private bool $canPrint = true,
     ) {}
+
+    /**
+     * A record in a final status (completed, released, cancelled, approved,
+     * disapproved, returned) is no longer edited. It opens read-only; to
+     * correct it, ESD reverts it first.
+     */
+    public static function isLocked(Transaction $transaction): bool
+    {
+        return $transaction->transaction_status->isTerminal();
+    }
 
     /**
      * @return array<string, mixed>
@@ -46,9 +58,10 @@ final class TransactionFormPresenter
     }
 
     /**
+     * @param  bool|null  $readOnly  Force the record read-only (a view, not an edit); null means read-only only when it is locked.
      * @return array<string, mixed>
      */
-    public function edit(Transaction $transaction): array
+    public function edit(Transaction $transaction, ?bool $readOnly = null): array
     {
         $transaction->loadMissing('issuanceRequest');
         $issuance = $transaction->issuanceRequest;
@@ -56,6 +69,9 @@ final class TransactionFormPresenter
         return [
             'mode' => 'edit',
             'base' => $this->base,
+            'readOnly' => $readOnly ?? self::isLocked($transaction),
+            'viewOnly' => $readOnly === true,
+            'canPrint' => $this->canPrint,
             'officeLocked' => $this->lockedOfficeId !== null,
             'id' => $transaction->id,
             'status' => $transaction->transaction_status->value,

@@ -23,11 +23,9 @@ use Illuminate\Support\Facades\DB;
  * and little else: each has its own eligible statuses, owner office and final
  * step (see {@see TransmittalDirection}).
  *
- *  - A transaction can sit in only one open (Draft) batch, in either direction.
- *    A Returned record is eligible both ways (ESD may hand it back, the field
- *    office may resubmit it); whichever batch is released first rewrites its
- *    status and would invalidate the other, so a draft hides the record from
- *    both pickers.
+ *  - A transaction can sit in only one open (Draft) batch, in either direction,
+ *    so a draft hides the record from both pickers. (A Returned record goes
+ *    down to the field office only; the office does not resubmit it.)
  *  - An ESD batch is for one field office only.
  *  - Only a Draft can be edited or deleted. Handing a batch over
  *    ({@see release()}, {@see transmit()}) re-checks every record, because it

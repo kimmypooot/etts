@@ -8,6 +8,7 @@ use App\Http\Controllers\TransmittalController as BaseTransmittalController;
 use App\Models\Transmittal;
 use App\Models\User;
 use App\Services\Transactions\WorkflowException;
+use App\Services\Transmittals\TransmittalService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,8 +71,8 @@ class TransmittalController extends BaseTransmittalController
     }
 
     /**
-     * The office's new applications and corrected returned ones that are free to
-     * send up, with room for other documents.
+     * The office's new, paid applications that are free to send up, with room
+     * for other documents.
      */
     public function create(Request $request): Response
     {
@@ -90,7 +91,7 @@ class TransmittalController extends BaseTransmittalController
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'ids' => ['nullable', 'array', 'max:'.\App\Services\Transmittals\TransmittalService::MAX_RECORDS],
+            'ids' => ['nullable', 'array', 'max:'.TransmittalService::MAX_RECORDS],
             'ids.*' => ['integer'],
             'manual' => ['nullable', 'array', 'max:50'],
             'manual.*.manual_name' => ['required', 'string', 'max:150'],

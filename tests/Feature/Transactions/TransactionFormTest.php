@@ -177,6 +177,47 @@ class TransactionFormTest extends TestCase
         }
     }
 
+    public function test_a_closed_spels_application_opens_read_only_and_cannot_be_saved(): void
+    {
+        foreach ([TransactionStatus::Approved, TransactionStatus::ApprovedReleased, TransactionStatus::Disapproved, TransactionStatus::Returned] as $status) {
+            $record = Transaction::factory()->create(['office_id' => 1, 'lname' => 'Keep', 'elig_code' => 'HGE', 'transaction_status' => $status]);
+
+            $this->actingAs($this->admin)->get("/admin/transactions/{$record->id}/edit")
+                ->assertInertia(fn (Assert $page) => $page->component('Transactions/Form')->where('readOnly', true)->where('viewOnly', false));
+
+            $this->actingAs($this->admin)->put("/admin/transactions/{$record->id}", $this->spelsInput(['lname' => 'Changed']))->assertSessionHas('error');
+
+            $this->assertSame('Keep', $record->fresh()->lname, $status->value);
+            $this->assertSame($status, $record->fresh()->transaction_status);
+        }
+    }
+
+    public function test_an_open_spels_application_stays_editable(): void
+    {
+        foreach ([TransactionStatus::Submitted, TransactionStatus::Forwarded, TransactionStatus::Received] as $status) {
+            $record = Transaction::factory()->create(['office_id' => 2, 'elig_code' => 'HGE', 'transaction_status' => $status]);
+
+            $this->actingAs($this->admin)->get("/admin/transactions/{$record->id}/edit")
+                ->assertInertia(fn (Assert $page) => $page->where('readOnly', false)->where('canPrint', true));
+        }
+    }
+
+    public function test_the_board_marks_closed_records_for_view_details(): void
+    {
+        $approved = Transaction::factory()->create(['office_id' => 1, 'transaction_status' => TransactionStatus::Approved]);
+        $received = Transaction::factory()->create(['office_id' => 1, 'transaction_status' => TransactionStatus::Received]);
+        $completed = Transaction::factory()->create(['office_id' => 1, 'transaction_type' => TransactionType::Certification, 'transaction_status' => TransactionStatus::Completed]);
+
+        $rows = collect([
+            ...$this->actingAs($this->admin)->get('/admin/transactions')->viewData('page')['props']['transactions']['data'],
+            ...$this->actingAs($this->admin)->get('/admin/transactions?board=history')->viewData('page')['props']['transactions']['data'],
+        ])->keyBy('id');
+
+        $this->assertTrue($rows[$approved->id]['locked']);
+        $this->assertTrue($rows[$completed->id]['locked']);
+        $this->assertFalse($rows[$received->id]['locked']);
+    }
+
     public function test_quick_editing_the_or_number_on_a_submitted_certification_receives_it(): void
     {
         $this->actingAs($this->admin)->post('/admin/transactions', $this->certInput());

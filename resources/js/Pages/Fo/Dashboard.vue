@@ -33,7 +33,7 @@ const series = computed(() => [
 
 const cards = computed(() => [
     { label: 'To forward', value: props.stats.pending_forward ?? 0, icon: 'upload', tone: 'warning', note: 'submitted, not yet sent up', href: '/fo/transactions?status=submitted' },
-    { label: 'Returned', value: props.stats.returned ?? 0, icon: 'refresh', tone: 'danger', note: 'sent back for correction', href: '/fo/transactions?board=history&status=Returned' },
+    { label: 'Returned', value: props.stats.returned ?? 0, icon: 'refresh', tone: 'danger', note: 'returned by the Regional Office', href: '/fo/transactions?board=history&status=Returned' },
     { label: 'With the Regional Office', value: props.stats.processing_ro ?? 0, icon: 'clock', tone: 'info', note: 'forwarded or being processed', href: '/fo/transactions' },
     { label: 'Ready for release', value: props.stats.ready_release ?? 0, icon: 'checkCircle', tone: 'success', note: 'completed, for the client', href: '/fo/transactions?status=Completed' },
 ]);

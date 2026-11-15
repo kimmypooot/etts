@@ -33,7 +33,11 @@ const props = defineProps({
     finish: { type: String, default: null },
     finishStatus: { type: String, default: null },
     vcasUrl: { type: String, default: null },
+    // The field office's View Details: steps 1 to 4, read-only, no printing or finishing.
+    viewOnly: { type: Boolean, default: false },
 });
+
+const last = computed(() => props.steps.length);
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 
@@ -65,7 +69,7 @@ watch(
 
 // The furthest step that can be opened: the first one still incomplete.
 // A locked record cannot be saved, so every step stays open for printing and release.
-const reachable = computed(() => (props.locked ? 5 : (props.steps.find((s) => s.number < 5 && s.missing.length > 0)?.number ?? 5)));
+const reachable = computed(() => (props.locked ? last.value : (props.steps.find((s) => s.number < 5 && s.missing.length > 0)?.number ?? last.value)));
 const currentStep = computed(() => props.steps[current.value - 1]);
 
 // Leaving a step with unsaved edits asks first.
@@ -87,6 +91,8 @@ const discard = () => {
 };
 
 const save = () => {
+    if (props.locked) return;
+
     form.post(`${props.base}/${props.id}/process/${current.value}`, {
         preserveScroll: true,
         forceFormData: current.value === 4,
@@ -107,7 +113,7 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
 </script>
 
 <template>
-    <Head :title="`Process #${id}`" />
+    <Head :title="viewOnly ? `Transaction #${id}` : `Process #${id}`" />
 
     <StaffLayout>
         <PageHeader
@@ -130,7 +136,8 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
             </span>
         </div>
 
-        <Alert v-if="locked" tone="info" class="mb-6">
+        <Alert v-if="viewOnly" tone="info" class="mb-6">This record is {{ status.toLowerCase() }}. You can view it but not change it.</Alert>
+        <Alert v-else-if="locked" tone="info" class="mb-6">
             This record is {{ status.toLowerCase() }}, so its details are locked. To correct them, revert it on the transactions board first.
         </Alert>
 
@@ -139,7 +146,7 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
         <div class="gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_22rem]">
             <form class="mb-6 rounded-lg border border-border bg-surface p-5" :aria-labelledby="`step-${current}-heading`" @submit.prevent="save">
                 <div class="mb-5">
-                    <p class="text-xs font-semibold tracking-wide text-text-muted uppercase">Step {{ current }} of 5</p>
+                    <p class="text-xs font-semibold tracking-wide text-text-muted uppercase">Step {{ current }} of {{ last }}</p>
                     <h2 :id="`step-${current}-heading`" class="text-lg font-semibold text-text">{{ currentStep.label }}</h2>
                 </div>
 
@@ -163,10 +170,10 @@ const hasOriginal = computed(() => props.attachments.some((a) => a.slot === 2));
                     <Button v-if="current > 1" type="button" variant="secondary" @click="go(current - 1)"><Icon name="chevronLeft" size="sm" />Back</Button>
                     <Button v-else type="button" variant="secondary" :href="base">Back to transactions</Button>
 
-                    <Button v-if="current < 5 && !locked" type="submit" :loading="form.processing">
+                    <Button v-if="current < last && !locked" type="submit" :loading="form.processing">
                         Save and continue<Icon name="chevronRight" size="sm" />
                     </Button>
-                    <Button v-else-if="current < 5" type="button" @click="go(current + 1)">Next<Icon name="chevronRight" size="sm" /></Button>
+                    <Button v-else-if="current < last" type="button" @click="go(current + 1)">Next<Icon name="chevronRight" size="sm" /></Button>
                 </div>
             </form>
 

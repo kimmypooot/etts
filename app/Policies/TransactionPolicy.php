@@ -48,11 +48,16 @@ class TransactionPolicy
         return $this->office($user);
     }
 
+    /** View Details of an own-office record, whatever its status. */
+    public function viewAsOffice(User $user, Transaction $transaction): bool
+    {
+        return $this->office($user) && $transaction->office_id === $user->office_id;
+    }
+
     /**
-     * Edit, delete or forward an own-office record. Allowed while it is still
-     * with the office: a SPELS application that is submitted or returned, or a
-     * certification or authentication that is submitted (awaiting its OR
-     * number) or received but not yet completed.
+     * Edit, delete or forward an own-office record. Allowed only while it is
+     * still with the office, that is while it is submitted. Once received,
+     * forwarded or closed (returned included), the office only views it.
      */
     public function workAsOffice(User $user, Transaction $transaction): bool
     {
@@ -77,9 +82,7 @@ class TransactionPolicy
 
     public static function stillWithOffice(Transaction $transaction): bool
     {
-        return $transaction->transaction_type->isSpels()
-            ? in_array($transaction->transaction_status, [TransactionStatus::Submitted, TransactionStatus::Returned], true)
-            : in_array($transaction->transaction_status, [TransactionStatus::Submitted, TransactionStatus::Received], true);
+        return $transaction->transaction_status === TransactionStatus::Submitted;
     }
 
     // ─── ESD ──────────────────────────────────────────────────────────────

@@ -24,9 +24,15 @@ const props = defineProps({
     options: { type: Object, required: true },
     base: { type: String, default: '/admin/transactions' },
     officeLocked: { type: Boolean, default: false },
+    // A record in a final status, or the field office's View Details: shown, never saved.
+    readOnly: { type: Boolean, default: false },
+    // A view, not a locked edit: there is nothing to revert from here.
+    viewOnly: { type: Boolean, default: false },
+    canPrint: { type: Boolean, default: true },
 });
 
 const editing = props.mode === 'edit';
+const title = computed(() => (!editing ? 'New transaction' : props.readOnly ? `Transaction #${props.id}` : `Edit transaction #${props.id}`));
 
 // Printing (opens the legacy-format documents in their own tab).
 const signatory = ref({ name: '', position: '', office: 'Examination Services Division' });
@@ -115,6 +121,8 @@ const issuanceEligibilityOptions = computed(() => [{ value: '', label: '—' }, 
 const examCenterOptions = computed(() => [{ value: '', label: '—' }, ...props.options.examCenters]);
 
 const submit = () => {
+    if (props.readOnly) return;
+
     const options = { preserveScroll: true, forceFormData: true };
 
     if (editing) {
@@ -124,7 +132,7 @@ const submit = () => {
     }
 };
 
-const walkIn = computed(() => editing && isSpels.value && props.status === 'submitted');
+const walkIn = computed(() => editing && !props.readOnly && isSpels.value && props.status === 'submitted');
 
 const textareaClass =
     'block w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-text shadow-xs focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
@@ -133,11 +141,11 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
 </script>
 
 <template>
-    <Head :title="editing ? `Edit transaction #${id}` : 'New transaction'" />
+    <Head :title="title" />
 
     <StaffLayout>
         <PageHeader
-            :title="editing ? `Edit transaction #${id}` : 'New transaction'"
+            :title="title"
             :breadcrumbs="[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Transactions', href: props.base }, { label: editing ? `#${id}` : 'New' }]"
         >
             <template v-if="editing" #actions>
@@ -148,11 +156,17 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
         <Alert v-if="Object.keys(form.errors).length" tone="danger" class="mb-6">
             Please correct the highlighted fields.
         </Alert>
+        <Alert v-if="readOnly" tone="info" class="mb-6">
+            <template v-if="viewOnly">This record is {{ status.toLowerCase() }}. You can view it but not change it.</template>
+            <template v-else>This record is {{ status.toLowerCase() }}, so its details are locked. To correct them, revert it on the transactions board first.</template>
+        </Alert>
         <Alert v-if="walkIn" tone="info" class="mb-6">
             This application was filed at ESD and has not been received yet. Saving it with an OR number confirms the walk-in and marks it received.
         </Alert>
 
         <form class="max-w-5xl" @submit.prevent="submit">
+            <!-- Read-only: the browser disables every control inside; links to files still open. -->
+            <fieldset :disabled="readOnly" class="min-w-0">
             <section :class="sectionClass" aria-labelledby="sec-applicant">
                 <h2 id="sec-applicant" :class="headingClass">Applicant</h2>
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -182,7 +196,7 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                         <Select id="elig_code" v-model="form.elig_code" :options="eligibilityOptions" />
                     </FormGroup>
                 </div>
-                <Alert v-if="isSpels" tone="info" class="mt-4">
+                <Alert v-if="isSpels && !readOnly" tone="info" class="mt-4">
                     An applicant may hold only one approved application per eligibility. If one is already on file, saving is refused.
                 </Alert>
             </section>
@@ -260,7 +274,7 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                 <p class="mb-4 text-sm text-text-muted">PDF, JPG or PNG, up to {{ Math.round(options.maxKb / 1024) }} MB each. Uploading a file replaces the one on record. Files are private and every view is logged.</p>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <FormGroup v-for="slot in [1, 2]" :id="`attachment_${slot}`" :key="slot" :label="`Attachment ${slot}`" :error="form.errors[`attachment_${slot}`]">
-                        <FileInput :id="`attachment_${slot}`" v-model="form[`attachment_${slot}`]" accept=".pdf,.jpg,.jpeg,.png" :invalid="!!form.errors[`attachment_${slot}`]" />
+                        <FileInput v-if="!readOnly" :id="`attachment_${slot}`" v-model="form[`attachment_${slot}`]" accept=".pdf,.jpg,.jpeg,.png" :invalid="!!form.errors[`attachment_${slot}`]" />
                         <a
                             v-for="existing in attachments.filter((a) => a.slot === slot)"
                             :key="existing.slot"
@@ -272,13 +286,28 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                             <Icon name="externalLink" size="sm" />
                             View current file ({{ existing.type.toUpperCase() }})
                         </a>
+                        <p v-if="readOnly && !attachments.some((a) => a.slot === slot)" class="text-sm text-text-muted">No file</p>
                     </FormGroup>
                 </div>
             </section>
 
-            <section v-if="editing && isIssuance" :class="sectionClass" aria-labelledby="sec-print">
+            <section :class="sectionClass" aria-labelledby="sec-notes">
+                <h2 id="sec-notes" :class="headingClass">Notes</h2>
+                <div class="grid gap-4">
+                    <FormGroup id="transaction_details" label="Details" :error="form.errors.transaction_details">
+                        <textarea id="transaction_details" v-model="form.transaction_details" rows="2" maxlength="500" :class="textareaClass" />
+                    </FormGroup>
+                    <FormGroup id="remarks" label="Remarks" :error="form.errors.remarks">
+                        <textarea id="remarks" v-model="form.remarks" rows="3" maxlength="1000" :class="textareaClass" />
+                    </FormGroup>
+                </div>
+            </section>
+
+            </fieldset>
+
+            <section v-if="editing && isIssuance && canPrint" :class="sectionClass" aria-labelledby="sec-print">
                 <h2 id="sec-print" :class="headingClass">Printing</h2>
-                <p class="mb-4 text-sm text-text-muted">Print from the saved record. Save your changes first.</p>
+                <p class="mb-4 text-sm text-text-muted">Print from the saved record.<template v-if="!readOnly"> Save your changes first.</template></p>
                 <div class="grid gap-6 lg:grid-cols-2">
                     <div>
                         <h3 class="mb-1 text-sm font-semibold text-text">Request form (ERRF)</h3>
@@ -297,21 +326,12 @@ const headingClass = 'mb-4 text-base font-semibold text-text';
                 </div>
             </section>
 
-            <section :class="sectionClass" aria-labelledby="sec-notes">
-                <h2 id="sec-notes" :class="headingClass">Notes</h2>
-                <div class="grid gap-4">
-                    <FormGroup id="transaction_details" label="Details" :error="form.errors.transaction_details">
-                        <textarea id="transaction_details" v-model="form.transaction_details" rows="2" maxlength="500" :class="textareaClass" />
-                    </FormGroup>
-                    <FormGroup id="remarks" label="Remarks" :error="form.errors.remarks">
-                        <textarea id="remarks" v-model="form.remarks" rows="3" maxlength="1000" :class="textareaClass" />
-                    </FormGroup>
-                </div>
-            </section>
-
             <div class="flex items-center justify-end gap-2">
-                <Button variant="secondary" :href="props.base">Cancel</Button>
-                <Button type="submit" :loading="form.processing">{{ editing ? 'Save changes' : 'Create transaction' }}</Button>
+                <Button v-if="readOnly" variant="secondary" :href="props.base">Back to transactions</Button>
+                <template v-else>
+                    <Button variant="secondary" :href="props.base">Cancel</Button>
+                    <Button type="submit" :loading="form.processing">{{ editing ? 'Save changes' : 'Create transaction' }}</Button>
+                </template>
             </div>
         </form>
     </StaffLayout>

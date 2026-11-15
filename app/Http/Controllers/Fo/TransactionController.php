@@ -16,6 +16,7 @@ use App\Services\Transactions\TransactionArchiver;
 use App\Services\Transactions\TransactionRecorder;
 use App\Services\Transactions\TransactionWorkflow;
 use App\Services\Transactions\WorkflowException;
+use App\Support\ProcessPage;
 use App\Support\TransactionFormPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ class TransactionController extends Controller
 
     private function presenter(User $user): TransactionFormPresenter
     {
-        return new TransactionFormPresenter('/fo/transactions', 'fo.attachments.show', $user->office_id);
+        return new TransactionFormPresenter('/fo/transactions', 'fo.attachments.show', $user->office_id, canPrint: false);
     }
 
     public function index(Request $request): Response
@@ -68,6 +69,8 @@ class TransactionController extends Controller
                 'date_completed' => $transaction->date_completed?->toDateString(),
                 'remarks' => $transaction->remarks,
                 'can_work' => $user->can('workAsOffice', $transaction),
+                // Once out of the office's hands the record is only viewed.
+                'can_view' => ! $user->can('workAsOffice', $transaction),
                 // Forwarding needs proof of payment; the workflow refuses an unpaid one too.
                 'can_forward' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels() && TransactionWorkflow::isPaid($transaction),
                 'awaiting_payment' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels() && ! TransactionWorkflow::isPaid($transaction),
@@ -116,6 +119,24 @@ class TransactionController extends Controller
         }
 
         return redirect()->route('fo.transactions.index')->with('status', "Transaction #{$transaction->id} created.");
+    }
+
+    /**
+     * View Details: a record the office can no longer change, read-only. A SPELS
+     * application opens on its form; a certification or authentication on the
+     * processing page's steps 1 to 4, without printing or status moves.
+     */
+    public function show(Request $request, Transaction $transaction): Response
+    {
+        $presenter = $this->presenter($request->user());
+
+        if ($transaction->transaction_type->isIssuance()) {
+            $step = $request->query('step');
+
+            return Inertia::render('Transactions/Process', ProcessPage::props($transaction, $presenter, $step === null ? null : (int) $step, viewOnly: true));
+        }
+
+        return Inertia::render('Transactions/Form', $presenter->edit($transaction, readOnly: true));
     }
 
     public function edit(Request $request, Transaction $transaction): Response

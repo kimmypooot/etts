@@ -3,6 +3,7 @@
 namespace Tests\Feature\FieldOffice;
 
 use App\Enums\AcquisitionCategory;
+use App\Enums\DeletionReason;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Enums\TransmittalDirection;
@@ -197,11 +198,14 @@ class FieldOfficePortalTest extends TestCase
         $rows = collect([...$this->props('/fo/transactions')['transactions']['data'], ...$this->props('/fo/transactions?board=history')['transactions']['data']])->keyBy('id');
 
         $this->assertTrue($rows[$submitted->id]['can_work'] && $rows[$submitted->id]['can_forward']);
-        $this->assertTrue($rows[$returned->id]['can_work'] && $rows[$returned->id]['can_forward']);
-        $this->assertFalse($rows[$forwarded->id]['can_work']);
-        $this->assertTrue($rows[$cert->id]['can_work']);
-        $this->assertFalse($rows[$cert->id]['can_forward'], 'Only SPELS applications are forwarded.');
-        $this->assertFalse($rows[$completedCert->id]['can_work']);
+        $this->assertFalse($rows[$submitted->id]['can_view']);
+
+        // Everything past Submitted is out of the office's hands: View Details only.
+        foreach ([$returned, $forwarded, $cert, $completedCert] as $record) {
+            $this->assertFalse($rows[$record->id]['can_work'], "#{$record->id} {$record->transaction_status->value}");
+            $this->assertFalse($rows[$record->id]['can_forward']);
+            $this->assertTrue($rows[$record->id]['can_view']);
+        }
     }
 
     // ─── Filing and editing ───────────────────────────────────────────────
@@ -294,17 +298,78 @@ class FieldOfficePortalTest extends TestCase
 
     // ─── Forwarding ───────────────────────────────────────────────────────
 
-    public function test_a_submitted_or_returned_application_can_be_forwarded(): void
+    public function test_a_submitted_application_can_be_forwarded(): void
     {
         $submitted = $this->record(TransactionStatus::Submitted);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$submitted->id}/forward", ['date' => '2026-05-04'])->assertSessionHas('status');
+
+        $this->assertSame(TransactionStatus::Forwarded, $submitted->fresh()->transaction_status);
+        $this->assertSame('2026-05-04', $submitted->fresh()->date_sent_to_ro->toDateString());
+    }
+
+    public function test_a_returned_application_is_closed_for_the_office(): void
+    {
         $returned = $this->record(TransactionStatus::Returned);
 
-        foreach ([$submitted, $returned] as $record) {
-            $this->actingAs($this->samar)->post("/fo/transactions/{$record->id}/forward", ['date' => '2026-05-04'])->assertSessionHas('status');
+        $this->actingAs($this->samar)->post("/fo/transactions/{$returned->id}/forward", ['date' => '2026-05-04'])->assertForbidden();
+        $this->actingAs($this->samar)->get("/fo/transactions/{$returned->id}/edit")->assertForbidden();
+        $this->actingAs($this->samar)->put("/fo/transactions/{$returned->id}", $this->spelsInput())->assertForbidden();
+        $this->actingAs($this->samar)->post('/fo/transactions/delete', ['ids' => [$returned->id], 'reason' => DeletionReason::cases()[0]->value, 'note' => str_repeat('x', DeletionReason::NOTE_MIN)])->assertSessionHas('error');
 
-            $this->assertSame(TransactionStatus::Forwarded, $record->fresh()->transaction_status);
-            $this->assertSame('2026-05-04', $record->fresh()->date_sent_to_ro->toDateString());
-        }
+        $this->assertSame(TransactionStatus::Returned, $returned->fresh()->transaction_status);
+        $this->assertTrue(Transaction::whereKey($returned->id)->exists());
+    }
+
+    // ─── View Details ─────────────────────────────────────────────────────
+
+    public function test_view_details_opens_a_spels_application_read_only_without_printing(): void
+    {
+        $approved = $this->record(TransactionStatus::Approved, 2, ['lname' => 'Cruz']);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$approved->id}")->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Transactions/Form')
+                ->where('id', $approved->id)
+                ->where('record.lname', 'Cruz')
+                ->where('readOnly', true)
+                ->where('viewOnly', true)
+                ->where('canPrint', false)
+                ->where('base', '/fo/transactions'));
+    }
+
+    public function test_view_details_opens_a_certification_on_the_processing_steps_read_only(): void
+    {
+        $completed = $this->record(TransactionStatus::Completed, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$completed->id}")->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Transactions/Process')
+                ->where('locked', true)
+                ->where('viewOnly', true)
+                ->where('step', 1)
+                ->where('finish', null)
+                ->where('vcasUrl', null)
+                ->where('base', '/fo/transactions')
+                ->has('steps', 4));
+    }
+
+    public function test_view_details_is_for_the_offices_own_records_only(): void
+    {
+        $theirs = $this->record(TransactionStatus::Approved, 3);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$theirs->id}")->assertNotFound();
+        $this->actingAs($this->admin)->get("/fo/transactions/{$theirs->id}")->assertForbidden();
+    }
+
+    public function test_a_received_certification_is_closed_for_the_office(): void
+    {
+        $received = $this->record(TransactionStatus::Received, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']);
+
+        $this->actingAs($this->samar)->get("/fo/transactions/{$received->id}/edit")->assertForbidden();
+        $this->actingAs($this->samar)->post('/fo/transactions/delete', ['ids' => [$received->id], 'reason' => DeletionReason::cases()[0]->value, 'note' => str_repeat('x', DeletionReason::NOTE_MIN)])->assertSessionHas('error');
+
+        $this->assertTrue(Transaction::whereKey($received->id)->exists());
     }
 
     public function test_forwarding_needs_a_date_and_a_record_still_with_the_office(): void
@@ -352,7 +417,7 @@ class FieldOfficePortalTest extends TestCase
         $this->assertSame(['Forward to RO'], $labels($this->record(TransactionStatus::Submitted), $this->samar));
         $this->assertSame(['Cancel transaction'], $labels($this->record(TransactionStatus::Submitted, 2, ['transaction_type' => TransactionType::Certification]), $this->samar));
         $this->assertSame([], $labels($this->record(TransactionStatus::Received, 2, ['transaction_type' => TransactionType::Certification, 'official_receipt' => 'OR-1']), $this->samar));
-        $this->assertSame(['Forward to RO'], $labels($this->record(TransactionStatus::Returned), $this->samar));
+        $this->assertSame([], $labels($this->record(TransactionStatus::Returned), $this->samar));
         $this->assertSame([], $labels($this->record(TransactionStatus::Received), $this->samar));
         $this->assertSame([], $labels($this->record(TransactionStatus::Returned), $this->admin));
         $this->assertSame(['Approve', 'Disapprove', 'Return to applicant'], $labels($this->record(TransactionStatus::Received), $this->admin));
@@ -477,7 +542,7 @@ class FieldOfficePortalTest extends TestCase
     public function test_building_and_sending_a_batch_up_to_the_regional_office(): void
     {
         $a = $this->record(TransactionStatus::Submitted);
-        $b = $this->record(TransactionStatus::Returned);
+        $b = $this->record(TransactionStatus::Submitted);
 
         $this->actingAs($this->samar)->post('/fo/transmittals', [
             'ids' => [$a->id, $b->id],

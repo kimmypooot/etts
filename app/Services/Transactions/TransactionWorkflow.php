@@ -65,9 +65,9 @@ final class TransactionWorkflow
     public function forward(Transaction $transaction, string $date, User $actor): Transaction
     {
         return $this->locked($transaction, function (Transaction $locked) use ($date, $actor) {
-            // A returned application, once the office has corrected it, goes up again.
-            if (! in_array($locked->transaction_status, [TransactionStatus::Submitted, TransactionStatus::Returned], true)) {
-                throw new WorkflowException("Only a submitted or returned application can be forwarded; this one is {$locked->transaction_status->value}.");
+            // A returned application is closed: the applicant files a new one.
+            if ($locked->transaction_status !== TransactionStatus::Submitted) {
+                throw new WorkflowException("Only a submitted application can be forwarded; this one is {$locked->transaction_status->value}.");
             }
 
             if ($locked->transaction_type->isIssuance()) {
@@ -215,14 +215,10 @@ final class TransactionWorkflow
         $status = $transaction->transaction_status;
         $type = $transaction->transaction_type;
 
-        // A field office forwards its own submitted or returned applications.
-        // ESD only ever forwards a submitted one (a returned one is theirs to fix first).
-        $forwardable = $status === TransactionStatus::Submitted
-            || ($status === TransactionStatus::Returned && $actor !== null && ! $actor->isAdmin());
-
+        // Only a submitted application is forwarded; a returned one is closed.
         // ESD is the Regional Office: what it files itself is received, not forwarded.
         // An unpaid application waits at the office until its OR number is entered.
-        if ($forwardable && $type->isSpels() && ! ($transaction->office?->isEsd() ?? false) && self::isPaid($transaction)) {
+        if ($status === TransactionStatus::Submitted && $type->isSpels() && ! ($transaction->office?->isEsd() ?? false) && self::isPaid($transaction)) {
             $actions[] = ['kind' => 'forward', 'status' => null, 'label' => 'Forward to RO', 'needs_remarks' => false];
         }
 
