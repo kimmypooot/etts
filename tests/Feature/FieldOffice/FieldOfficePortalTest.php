@@ -46,9 +46,12 @@ class FieldOfficePortalTest extends TestCase
         $this->admin = User::factory()->admin()->create();
     }
 
+    /** A SPELS application is paid (it has an OR number) unless `$extra` says otherwise. */
     private function record(TransactionStatus $status = TransactionStatus::Submitted, int $office = 2, array $extra = []): Transaction
     {
-        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, ...$extra]);
+        $spels = ($extra['transaction_type'] ?? TransactionType::Spels) === TransactionType::Spels;
+
+        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, 'official_receipt' => $spels ? 'OR-0001' : null, ...$extra]);
     }
 
     /**
@@ -312,6 +315,33 @@ class FieldOfficePortalTest extends TestCase
         $this->actingAs($this->samar)->post("/fo/transactions/{$submitted->id}/forward", [])->assertSessionHasErrors('date');
         $this->actingAs($this->samar)->post("/fo/transactions/{$received->id}/forward", ['date' => '2026-05-04'])->assertForbidden();
         $this->assertSame(TransactionStatus::Submitted, $submitted->fresh()->transaction_status);
+    }
+
+    public function test_the_office_cannot_forward_an_application_without_an_or_number(): void
+    {
+        $unpaid = $this->record(TransactionStatus::Submitted, 2, ['official_receipt' => null]);
+
+        $this->actingAs($this->samar)->post("/fo/transactions/{$unpaid->id}/forward", ['date' => '2026-05-04'])->assertSessionHas('error');
+
+        $this->assertSame(TransactionStatus::Submitted, $unpaid->fresh()->transaction_status);
+        $this->assertNull($unpaid->fresh()->date_sent_to_ro);
+    }
+
+    public function test_the_board_offers_forwarding_only_once_the_application_is_paid(): void
+    {
+        $unpaid = $this->record(TransactionStatus::Submitted, 2, ['official_receipt' => null]);
+        $paid = $this->record(TransactionStatus::Submitted, 2, ['official_receipt' => 'OR-1']);
+
+        $this->actingAs($this->samar)->get('/fo/transactions')->assertInertia(function (Assert $page) use ($unpaid, $paid) {
+            $rows = collect($page->toArray()['props']['transactions']['data'])->keyBy('id');
+
+            $this->assertFalse($rows[$unpaid->id]['can_forward']);
+            $this->assertTrue($rows[$unpaid->id]['awaiting_payment']);
+            $this->assertTrue($rows[$paid->id]['can_forward']);
+            $this->assertFalse($rows[$paid->id]['awaiting_payment']);
+            // Still the office's own to edit while it waits for payment.
+            $this->assertTrue($rows[$unpaid->id]['can_work']);
+        });
     }
 
     public function test_the_workflow_offers_the_office_only_forwarding(): void

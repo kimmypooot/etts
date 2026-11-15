@@ -68,7 +68,9 @@ class TransactionController extends Controller
                 'date_completed' => $transaction->date_completed?->toDateString(),
                 'remarks' => $transaction->remarks,
                 'can_work' => $user->can('workAsOffice', $transaction),
-                'can_forward' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels(),
+                // Forwarding needs proof of payment; the workflow refuses an unpaid one too.
+                'can_forward' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels() && TransactionWorkflow::isPaid($transaction),
+                'awaiting_payment' => $user->can('workAsOffice', $transaction) && $transaction->transaction_type->isSpels() && ! TransactionWorkflow::isPaid($transaction),
                 'can_cancel' => $user->can('cancelAsOffice', $transaction),
             ]);
 

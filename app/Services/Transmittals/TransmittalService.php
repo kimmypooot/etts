@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Models\Transmittal;
 use App\Models\TransmittalItem;
 use App\Models\User;
+use App\Services\Transactions\TransactionWorkflow;
 use App\Services\Transactions\WorkflowException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -48,7 +49,10 @@ final class TransmittalService
     {
         return Transaction::query()
             ->whereIn('transaction_status', TransactionStatus::values($direction->eligibleStatuses()))
-            ->when($direction === TransmittalDirection::FoToRo, fn (Builder $query) => $query->where('transaction_type', TransactionType::Spels->value))
+            // Up to the Regional Office: SPELS applications only, and only once paid (an OR number that is not blank).
+            ->when($direction === TransmittalDirection::FoToRo, fn (Builder $query) => $query
+                ->where('transaction_type', TransactionType::Spels->value)
+                ->whereRaw("TRIM(COALESCE(official_receipt, '')) <> ''"))
             ->whereNotExists(fn ($sub) => $sub->select(DB::raw(1))
                 ->from('transmittal_items as ti')
                 ->join('transmittals as t2', 't2.id', '=', 'ti.transmittal_id')
@@ -424,6 +428,13 @@ final class TransmittalService
             $wrongStatus = ! in_array($record->transaction_status, $allowed, true);
             $wrongType = $transmittal->direction === TransmittalDirection::FoToRo && ! $record->transaction_type->isSpels();
             $wrongOffice = $record->office_id !== $transmittal->fieldOfficeId();
+
+            if ($transmittal->direction === TransmittalDirection::FoToRo && ! $wrongType && ! TransactionWorkflow::isPaid($record)) {
+                throw new WorkflowException(sprintf(
+                    'Cannot continue: %s has no OR number. Enter it once the application is paid, or remove it from this transmittal.',
+                    trim($record->lname.', '.$record->fname),
+                ));
+            }
 
             if ($wrongStatus || $wrongType || $wrongOffice) {
                 throw new WorkflowException(sprintf(

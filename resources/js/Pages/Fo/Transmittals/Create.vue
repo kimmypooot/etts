@@ -67,7 +67,7 @@ const inputClass =
 
             <Table :empty="rows.length === 0">
                 <template #empty>
-                    <EmptyState icon="envelope" title="No applications ready" description="New and returned applications that are not already in another draft appear here." />
+                    <EmptyState icon="envelope" title="No applications ready" description="New and returned applications that are paid (have an OR number) and are not already in another draft appear here." />
                 </template>
                 <thead>
                     <tr>

@@ -22,8 +22,10 @@ use Illuminate\Support\Str;
  *            -> Released, wherever it was filed. It is received once paid, that
  *            is once it carries an OR number (the recorder does this when the
  *            number is saved). Cancelled only from submitted or received.
- *  - A SPELS field-office filing is forwarded and then received. A SPELS filing
- *    made at ESD itself has no forwarding leg, so it is received straight from submitted.
+ *  - A SPELS field-office filing is forwarded and then received. It is forwarded
+ *    only once paid (it carries an OR number); until then it stays submitted at
+ *    the office. A SPELS filing made at ESD itself has no forwarding leg, so it
+ *    is received straight from submitted.
  *
  * Every change runs in a transaction on a locked row and writes one audit entry
  * per record. Approving a SPELS record passes the one-approval-per-eligibility
@@ -74,6 +76,10 @@ final class TransactionWorkflow
 
             if ($locked->office?->isEsd()) {
                 throw new WorkflowException('An application filed at ESD is already at the Regional Office and is not forwarded; mark it received instead.');
+            }
+
+            if (! self::isPaid($locked)) {
+                throw new WorkflowException('Enter the OR number first: an application is forwarded to the Regional Office only once it is paid.');
             }
 
             $this->apply($locked, TransactionStatus::Forwarded, ['date_sent_to_ro' => $date], $actor, "Forwarded to the Regional Office on {$date}.");
@@ -215,7 +221,8 @@ final class TransactionWorkflow
             || ($status === TransactionStatus::Returned && $actor !== null && ! $actor->isAdmin());
 
         // ESD is the Regional Office: what it files itself is received, not forwarded.
-        if ($forwardable && $type->isSpels() && ! ($transaction->office?->isEsd() ?? false)) {
+        // An unpaid application waits at the office until its OR number is entered.
+        if ($forwardable && $type->isSpels() && ! ($transaction->office?->isEsd() ?? false) && self::isPaid($transaction)) {
             $actions[] = ['kind' => 'forward', 'status' => null, 'label' => 'Forward to RO', 'needs_remarks' => false];
         }
 
@@ -258,6 +265,15 @@ final class TransactionWorkflow
     }
 
     // ─── Rules ────────────────────────────────────────────────────────────
+
+    /**
+     * Whether the record carries proof of payment: an OR number that is not
+     * blank. A field office application is forwarded only once it is paid.
+     */
+    public static function isPaid(Transaction $transaction): bool
+    {
+        return filled($transaction->official_receipt);
+    }
 
     private function canReceive(Transaction $transaction): bool
     {

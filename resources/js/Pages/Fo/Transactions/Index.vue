@@ -219,6 +219,7 @@ const inputClass =
                     <td><TransactionStatusBadge :status="row.status" /></td>
                     <td class="min-w-40">
                         <Button v-if="row.can_forward" variant="primary" size="sm" @click="openForward(row)">Forward to RO</Button>
+                        <span v-else-if="row.awaiting_payment" class="text-sm text-text-muted" title="Enter the OR number to forward this application to the Regional Office">Awaiting payment</span>
                         <Button v-if="row.can_cancel" variant="outline" size="sm" @click="openCancel(row)">Cancel transaction</Button>
                     </td>
                     <td class="sticky right-0 w-28 bg-surface text-right whitespace-nowrap">

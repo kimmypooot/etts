@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Transmittals;
 
+use App\Enums\DeletionReason;
 use App\Enums\TransactionStatus;
 use App\Enums\TransactionType;
 use App\Enums\TransmittalDirection;
@@ -14,7 +15,6 @@ use App\Models\User;
 use App\Services\Transactions\TransactionArchiver;
 use App\Services\Transactions\WorkflowException;
 use App\Services\Transmittals\TransmittalService;
-use App\Enums\DeletionReason;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -37,9 +37,10 @@ class TransmittalServiceTest extends TestCase
         $this->service = app(TransmittalService::class);
     }
 
+    /** A SPELS application is paid (it has an OR number) unless `$extra` says otherwise. */
     private function record(TransactionStatus $status, int $office = 2, TransactionType $type = TransactionType::Spels, array $extra = []): Transaction
     {
-        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, 'transaction_type' => $type, ...$extra]);
+        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, 'transaction_type' => $type, 'official_receipt' => $type->isSpels() ? 'OR-0001' : null, ...$extra]);
     }
 
     private function down(array $records, string $remarks = ''): Transmittal
@@ -379,6 +380,34 @@ class TransmittalServiceTest extends TestCase
         $draft = $this->service->createDraft(TransmittalDirection::FoToRo, [], '', $this->admin, 2, [['name' => 'Letter', 'description' => 'Cover letter']]);
 
         $this->assertSame(TransmittalStatus::Transmitted, $this->service->transmit($draft, '2026-06-01', $this->admin)->status);
+    }
+
+    public function test_an_application_without_an_or_number_cannot_go_up_to_the_regional_office(): void
+    {
+        $unpaid = $this->record(TransactionStatus::Submitted, 2, extra: ['official_receipt' => null]);
+        $blank = $this->record(TransactionStatus::Submitted, 2, extra: ['official_receipt' => '  ']);
+        $paid = $this->record(TransactionStatus::Submitted, 2, extra: ['official_receipt' => 'OR-1']);
+
+        $this->assertSame([$paid->id], $this->service->eligible(TransmittalDirection::FoToRo)->pluck('id')->all());
+
+        $this->expectException(WorkflowException::class);
+        $this->service->createDraft(TransmittalDirection::FoToRo, [$unpaid->id, $blank->id], '', $this->admin, 2);
+    }
+
+    public function test_transmitting_stops_if_an_application_has_lost_its_or_number(): void
+    {
+        $record = $this->record(TransactionStatus::Submitted, 2, extra: ['official_receipt' => 'OR-1']);
+        $draft = $this->service->createDraft(TransmittalDirection::FoToRo, [$record->id], '', $this->admin, 2);
+        $record->forceFill(['official_receipt' => null])->save();
+
+        try {
+            $this->service->transmit($draft, '2026-06-01', $this->admin);
+            $this->fail('An unpaid application was transmitted.');
+        } catch (WorkflowException $e) {
+            $this->assertStringContainsString('OR number', $e->getMessage());
+        }
+
+        $this->assertSame(TransactionStatus::Submitted, $record->fresh()->transaction_status);
     }
 
     public function test_transmitting_stops_if_an_application_has_since_moved_on(): void

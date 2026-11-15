@@ -29,9 +29,10 @@ class TransmittalScreensTest extends TestCase
         $this->admin = User::factory()->admin()->create();
     }
 
+    /** A paid application (it has an OR number) unless `$extra` says otherwise. */
     private function record(TransactionStatus $status = TransactionStatus::Approved, int $office = 2, array $extra = []): Transaction
     {
-        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, ...$extra]);
+        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, 'official_receipt' => 'OR-0001', ...$extra]);
     }
 
     private function draft(array $records): Transmittal

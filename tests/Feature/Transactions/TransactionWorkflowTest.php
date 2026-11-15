@@ -31,9 +31,10 @@ class TransactionWorkflowTest extends TestCase
         $this->workflow = app(TransactionWorkflow::class);
     }
 
+    /** A paid application (it has an OR number) unless `$extra` says otherwise. */
     private function spels(TransactionStatus $status, int $office = 2, array $extra = []): Transaction
     {
-        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, ...$extra]);
+        return Transaction::factory()->create(['transaction_status' => $status, 'office_id' => $office, 'official_receipt' => 'OR-0001', ...$extra]);
     }
 
     private function cert(TransactionStatus $status, array $extra = []): Transaction
@@ -52,6 +53,32 @@ class TransactionWorkflowTest extends TestCase
         $this->assertSame(TransactionStatus::Forwarded, $record->fresh()->transaction_status);
         $this->assertSame('2026-05-01', $record->fresh()->date_sent_to_ro->toDateString());
         $this->assertSame(1, AuditLog::where('action', 'transaction.status_changed')->where('subject_id', $record->id)->count());
+    }
+
+    public function test_an_application_without_an_or_number_is_not_forwarded(): void
+    {
+        foreach ([null, '', '   '] as $receipt) {
+            $record = $this->spels(TransactionStatus::Submitted, extra: ['official_receipt' => $receipt])->load('office');
+
+            $this->assertNotContains('forward', array_column($this->workflow->availableActions($record, $this->admin), 'kind'));
+
+            try {
+                $this->workflow->forward($record, '2026-05-01', $this->admin);
+                $this->fail('An unpaid application was forwarded.');
+            } catch (WorkflowException $e) {
+                $this->assertStringContainsString('OR number', $e->getMessage());
+            }
+
+            $this->assertSame(TransactionStatus::Submitted, $record->fresh()->transaction_status);
+            $this->assertNull($record->fresh()->date_sent_to_ro);
+        }
+    }
+
+    public function test_a_paid_application_is_offered_forwarding(): void
+    {
+        $record = $this->spels(TransactionStatus::Submitted, extra: ['official_receipt' => 'OR-1'])->load('office');
+
+        $this->assertContains('forward', array_column($this->workflow->availableActions($record, $this->admin), 'kind'));
     }
 
     public function test_an_esd_filed_spels_record_is_not_forwarded(): void
