@@ -9,6 +9,9 @@ setup and `docs/migration-plan.md` for the rebuild plan, findings and phases.
 `docs/CUTOVER_RUNBOOK.md` covers the legacy sync, final import and cutover.
 `docs/PROCESS_TRANSACTION_FLOW.md` records how the legacy issuance
 processing page behaves, as the baseline for its rebuild.
+`docs/KIOSK_LOOKUP_DATA.md` is where the eligibility and exam-center seed
+lists came from. Design specs and implementation plans live in
+`docs/superpowers/specs` and `docs/superpowers/plans`.
 
 ESD Transactions Tracking System for CSC Regional Office VIII: certifications,
 authentications and SPELS applications, transmittals between ESD and field
@@ -43,6 +46,12 @@ php artisan test --compact --filter=SomeTest          # one class or method
 php artisan test --compact tests/Feature/Transactions # one directory
 vendor/bin/pint                # code style (Laravel Pint)
 ```
+
+Run locally on port 8080 (`php artisan serve --port=8080`): IMIS registers
+this app at `http://localhost:8080/sso`, and its host:port must be in IMIS
+`SSO_HUB_HOSTS`. Key `.env` values: `DB_*` (new `etts` DB), `LEGACY_DB_*`
+(copy of the legacy `esd_casts_*` tables, read-only), `IMIS_SSO_URL`
+(IMIS `POST /api/v1/sso/validate`), `IMIS_PORTAL_URL`, `ATTACHMENTS_ROOT`.
 
 Tests run on SQLite `:memory:` (see `phpunit.xml`), so SQL that goes through
 `App\Support\Sql` must stay portable between MySQL and SQLite.
