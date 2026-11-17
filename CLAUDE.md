@@ -24,7 +24,11 @@ offices, and a walk-in kiosk.
 - A separate app under the IMIS hub (`../new-imis`). Staff sign in only via
   IMIS SSO (`Auth\ImisSsoController`, same contract as `../jportal`); roles
   come from IMIS `application_roles.code` (`App\Enums\UserRole`: `admin`,
-  `field_office`). Never add a password sign-in for staff.
+  `field_office`). Never add a password sign-in for staff. The one exception
+  is the local-only dev sign-in (`Auth\DevSignInController`, `/dev/sign-in`):
+  it exists only when `APP_ENV=local` and `ETTS_DEV_SIGN_IN=true`, signs in as
+  stub users (ids from 900,000,000), and `etts:cutover-check` fails while it
+  is on. Keep both checks; never loosen them or reuse it for real accounts.
 - The legacy app (`../etts`) is reference only. Never edit it. Its database
   is read through the `legacy` connection by import commands only.
 - Office scoping is enforced in SQL (query scope plus policy), never only in
