@@ -27,6 +27,7 @@ class CutoverCheckCommand extends Command
         $this->check('Debug is off', ! config('app.debug'), 'APP_DEBUG=true shows stack traces to the public', warnOnly: $local);
         $this->check('Environment is production', app()->environment('production'), 'APP_ENV is "'.app()->environment().'"', warnOnly: $local);
         $this->check('APP_URL uses HTTPS', str_starts_with((string) config('app.url'), 'https://'), (string) config('app.url'), warnOnly: $local);
+        $this->check('Dev sign-in is off', ! config('etts.dev_sign_in'), 'ETTS_DEV_SIGN_IN=true: remove it from .env (local development only)', warnOnly: $local);
         $this->check('IMIS sign-in address is set', filled(config('services.imis.sso_url')), 'IMIS_SSO_URL is empty');
         $this->check('IMIS portal address is set', filled(config('services.imis.portal_url')), 'IMIS_PORTAL_URL is empty');
         $this->check('Kiosk host is configured', ! empty(config('etts.kiosk.domains')), 'ETTS_KIOSK_DOMAINS is empty, so the kiosk is served under /kiosk on the staff host', warnOnly: $local);

@@ -21,6 +21,28 @@ class DevSignInTest extends TestCase
         $this->post('/dev/sign-in', ['role' => 'admin'])->assertNotFound();
     }
 
+    public function test_sign_in_page_has_no_dev_form_outside_local(): void
+    {
+        config(['etts.dev_sign_in' => true]);
+
+        foreach (['production', 'staging', 'testing'] as $env) {
+            $this->app['env'] = $env;
+
+            $this->get('/login')->assertOk()->assertInertia(fn ($page) => $page
+                ->component('Auth/SignIn')
+                ->where('devSignIn', null));
+        }
+    }
+
+    public function test_cutover_check_fails_while_dev_sign_in_is_on(): void
+    {
+        config(['etts.dev_sign_in' => true]);
+
+        $this->artisan('etts:cutover-check')
+            ->expectsOutputToContain('ETTS_DEV_SIGN_IN=true')
+            ->assertFailed();
+    }
+
     public function test_refuses_when_not_local_even_if_flag_is_on(): void
     {
         config(['etts.dev_sign_in' => true]);
